@@ -2,15 +2,17 @@ Image assets guide
 
 Current files used by the wedding day guide (organized per page under `public/pages`):
 
+- Storyboard card thumbnails: `public/pages/storyboard/*.jpg` (message, seating, notes, profile, photos, favorites-1, favorites-2, guide, thanks)
+
 - Seating card: `public/pages/seating/ritz-lounge.JPG`
-- Notes card: `public/pages/notes/story-2.jpg`
+- Notes card: `public/pages/notes/202082.jpg`
 - Profile card + portraits: `public/pages/profile/two.JPG`, `public/pages/profile/groom.JPG`, `public/pages/profile/bride.JPG`
-- Message card: `public/pages/message/IMG_5206.jpg`
+- Message card: `public/pages/message/202080.jpg`
 - Favorites 1: `public/pages/favorites-1/201579_0.jpg` (and related images)
 - Favorites 2: `public/pages/favorites-2/IMG_8799.jpg` (and related images)
 - Photos card: `public/pages/photos/story-4.jpg`
 - Guide card: `public/pages/guide/night-1.jpg`
-- Thanks card: `public/pages/thanks/IMG_4922.jpg`
+- Thanks card: `public/pages/thanks/202081.jpg`
 - Shared assets: `public/shared/favicon.png`
 
 Notes

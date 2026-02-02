@@ -18,14 +18,15 @@
   --header-text-size: clamp(11px, 3.2vw, 14px);
   --header-gap: clamp(6px, 1.8vw, 10px);
   --header-pad-x: clamp(12px, 4vw, 20px);
-  --header-pad-y: clamp(18px, 5vw, 32px);
+  --header-pad-y: clamp(12px, 3.2vw, 18px);
+  --header-height: clamp(56px, 8vw, 76px);
 }
 
 @layer base {
   html {
     /* Smooth in-page jumps and reserve space for sticky header (a bit多め) */
     scroll-behavior: smooth;
-    scroll-padding-top: calc(env(safe-area-inset-top) + 88px);
+    scroll-padding-top: calc(env(safe-area-inset-top) + var(--header-height) + 16px);
     /* Avoid white flash on iOS rubber-band overscroll */
     background-color: #0E1828; /* navy fallback under body gradient */
   }
@@ -261,22 +262,10 @@
     }
   }
   .story-card__media,
-  .story-card__media-bg,
   .story-card__overlay,
   .story-card__bg {
     border-radius: inherit;
   }
-  .story-card__media-bg {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center;
-    filter: blur(14px) saturate(120%);
-    transform: scale(1.08);
-    opacity: 0.7;
-  }
-  .story-card__media { z-index: 1; }
-  .story-card__overlay { z-index: 2; }
   .story-card__overlay {
     position: absolute;
     inset: 0;

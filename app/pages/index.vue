@@ -25,20 +25,17 @@
               @click="jumpTo(item.to)"
               :aria-label="item.title"
             >
-              <span
-                v-if="item.image"
-                class="story-card__media-bg"
-                :style="{ backgroundImage: `url('${item.image}')` }"
-                aria-hidden="true"
-              ></span>
               <NuxtImg
                 v-if="item.image"
                 :src="item.image"
                 alt=""
-                class="story-card__media absolute inset-0 h-full w-full object-contain"
-                width="600"
-                sizes="(max-width: 640px) 32vw, (max-width: 1024px) 200px, 240px"
-                preset="story"
+                :class="[
+                  'story-card__media absolute inset-0 h-full w-full',
+                  isZoomedOut(item.id) ? 'object-contain bg-midnight/70' : 'object-cover'
+                ]"
+                width="240"
+                height="300"
+                :preset="isZoomedOut(item.id) ? 'storyContain' : 'story'"
                 loading="lazy"
                 decoding="async"
               />
@@ -64,6 +61,11 @@ import { useEventData } from '../../composables/useEventData'
 
 const { displayCouple, venue, displayDateParts, storyboardItems } = useEventData()
 const eventLine = 'Wedding Day Guide'
+const zoomOutIds = new Set(['message', 'notes', 'thanks'])
+
+function isZoomedOut(id?: string) {
+  return id ? zoomOutIds.has(id) : false
+}
 
 function jumpTo(target?: string) {
   if (!target) return

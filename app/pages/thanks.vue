@@ -90,7 +90,7 @@ const rankingItems = [
     catch: '三宅家のお米を炊けば至高のうまさ。',
     story: '甘みがすんごい。QOL爆上がりです！！',
     points: [],
-    image: 'https://www.zojirushi.co.jp/syohin/rice/ricecooker/nw-na/images/ogp_nwna.jpg',
+    image: '/pages/thanks/202088.jpg',
     imageAlt: '炎舞炊き',
     linkUrl: 'https://www.zojirushi.co.jp/syohin/rice/ricecooker/nw-na/#container',
     linkLabel: 'リンクを見る'

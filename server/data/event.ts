@@ -191,14 +191,14 @@ export const eventConfig: EventConfig = {
     signature: '三宅 智也・美穂乃'
   },
   storyboard: [
-    { id: 'message', label: 'Message', title: 'メッセージ', subtitle: 'ご挨拶', image: '/pages/message/202080.jpg', to: '/message' },
-    { id: 'seating', label: 'Seating', title: '席次表', subtitle: '席次表の確認', image: '/pages/seating/ritz-lounge.JPG', to: '/seating' },
-    { id: 'notes', label: 'Notes', title: 'お願い', subtitle: '当日のご注意', image: '/pages/notes/202082.jpg', to: '/notes' },
-    { id: 'profile', label: 'Profile', title: 'プロフィール', subtitle: '新郎新婦のご紹介', image: '/pages/profile/two.JPG', to: '/profile' },
-    { id: 'photos', label: 'Photos', title: '写真共有', subtitle: '撮影した写真を送る', image: '/pages/photos/story-4.jpg', to: '/photos' },
-    { id: 'fav-1', label: 'Favorites', title: '推しの写真①', subtitle: 'Tomoya', image: '/pages/favorites-1/201579_0.jpg', to: '/favorites-1' },
-    { id: 'fav-2', label: 'Favorites', title: '推しの写真②', subtitle: 'Mihono', image: '/pages/favorites-2/IMG_8799.jpg', to: '/favorites-2' },
-    { id: 'guide', label: 'Extras', title: '？', subtitle: 'お楽しみコーナー', image: '/pages/guide/night-1.jpg', to: '/guide' },
-    { id: 'thanks', label: 'Thanks', title: '？', subtitle: '導入して良かったもの', image: '/pages/thanks/202081.jpg', to: '/thanks' }
+    { id: 'message', label: 'Message', title: 'メッセージ', subtitle: 'ご挨拶', image: '/pages/storyboard/message.jpg', to: '/message' },
+    { id: 'seating', label: 'Seating', title: '席次表', subtitle: '席次表の確認', image: '/pages/storyboard/seating.jpg', to: '/seating' },
+    { id: 'notes', label: 'Notes', title: 'お願い', subtitle: '当日のご注意', image: '/pages/storyboard/notes.jpg', to: '/notes' },
+    { id: 'profile', label: 'Profile', title: 'プロフィール', subtitle: '新郎新婦のご紹介', image: '/pages/storyboard/profile.jpg', to: '/profile' },
+    { id: 'photos', label: 'Photos', title: '写真共有', subtitle: '撮影した写真を送る', image: '/pages/storyboard/photos.jpg', to: '/photos' },
+    { id: 'fav-1', label: 'Favorites', title: '推しの写真①', subtitle: 'Tomoya', image: '/pages/storyboard/favorites-1.jpg', to: '/favorites-1' },
+    { id: 'fav-2', label: 'Favorites', title: '推しの写真②', subtitle: 'Mihono', image: '/pages/storyboard/favorites-2.jpg', to: '/favorites-2' },
+    { id: 'guide', label: 'Extras', title: '？', subtitle: 'お楽しみコーナー', image: '/pages/storyboard/guide.jpg', to: '/guide' },
+    { id: 'thanks', label: 'Thanks', title: '？', subtitle: '導入して良かったもの', image: '/pages/storyboard/thanks.jpg', to: '/thanks' }
   ]
 }

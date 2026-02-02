@@ -81,6 +81,9 @@ export default defineNuxtConfig({
       story: {
         modifiers: { fit: 'cover', format: 'jpg', quality: 70 }
       },
+      storyContain: {
+        modifiers: { fit: 'inside', format: 'jpg', quality: 70 }
+      },
       album: {
         modifiers: { fit: 'cover', format: 'jpg', quality: 75 }
       },

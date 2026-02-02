@@ -181,7 +181,7 @@ let panStart = { x: 0, y: 0 }
 let zoomStart = 1
 let pinchStartDistance = 0
 let pinchStartCenter = { x: 0, y: 0 }
-const MIN_ZOOM = 0.8
+const BASE_MIN_ZOOM = 0.8
 const MAX_ZOOM = 2.2
 const DOUBLE_TAP_DELAY = 300
 let lastTapAt = 0
@@ -265,6 +265,17 @@ function getBaseScale() {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
 }
 
+function getMinZoom() {
+  const scrollEl = seatingScrollRef.value
+  const sheetEl = seatingSheetRef.value
+  if (!scrollEl || !sheetEl) return BASE_MIN_ZOOM
+  const baseScale = getBaseScale()
+  const viewWidth = scrollEl.clientWidth
+  const sheetWidth = sheetEl.offsetWidth || 1
+  const fitWidth = viewWidth / sheetWidth / baseScale
+  return Math.min(BASE_MIN_ZOOM, fitWidth)
+}
+
 function clampPan(nextX: number, nextY: number, nextZoom: number) {
   const scrollEl = seatingScrollRef.value
   const sheetEl = seatingSheetRef.value
@@ -284,7 +295,8 @@ function clampPan(nextX: number, nextY: number, nextZoom: number) {
 }
 
 function applyTransform(nextX: number, nextY: number, nextZoom: number, shouldClamp = true) {
-  const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+  const minZoom = getMinZoom()
+  const clampedZoom = clamp(nextZoom, minZoom, MAX_ZOOM)
   const clamped = shouldClamp ? clampPan(nextX, nextY, clampedZoom) : { x: nextX, y: nextY }
   panX.value = clamped.x
   panY.value = clamped.y
@@ -340,7 +352,8 @@ function onPointerMove(event: PointerEvent) {
     if (!pinchStartDistance) return
     const distance = getDistance(p1, p2)
     const rawZoom = zoomStart * (distance / pinchStartDistance)
-    const nextZoom = clamp(rawZoom, MIN_ZOOM, MAX_ZOOM)
+    const minZoom = getMinZoom()
+    const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
     const center = getCenter(p1, p2)
     const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
     const scrollRect = seatingScrollRef.value?.getBoundingClientRect()
@@ -410,7 +423,8 @@ function onTouchMove(event: TouchEvent) {
     if (!pinchStartDistance) return
     const distance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
     const rawZoom = zoomStart * (distance / pinchStartDistance)
-    const nextZoom = clamp(rawZoom, MIN_ZOOM, MAX_ZOOM)
+    const minZoom = getMinZoom()
+    const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
     const center = getCenter({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
     const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
     const scrollRect = seatingScrollRef.value?.getBoundingClientRect()
@@ -486,7 +500,8 @@ function onWheel(event: WheelEvent) {
   if (!seatingScrollRef.value) return
   if (event.ctrlKey) {
     const zoomFactor = Math.exp(-event.deltaY * 0.002)
-    const nextZoom = clamp(zoom.value * zoomFactor, MIN_ZOOM, MAX_ZOOM)
+    const minZoom = getMinZoom()
+    const nextZoom = clamp(zoom.value * zoomFactor, minZoom, MAX_ZOOM)
     const rect = seatingScrollRef.value.getBoundingClientRect()
     const centerX = event.clientX - rect.left - rect.width / 2
     const centerY = event.clientY - rect.top - rect.height / 2
