@@ -1,0 +1,186 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256' viewBox='0 0 256 256' shape-rendering='crispEdges'>
+  <defs>
+    <g id='mt-a'>
+      <rect x='0' y='0' width='16' height='10' fill='#7a7a7a'/>
+      <rect x='2' y='2' width='12' height='5' fill='#bfbfbf'/>
+      <rect x='6' y='1' width='4' height='2' fill='#ededed'/>
+      <rect x='2' y='10' width='12' height='2' fill='#5a5a5a'/>
+      <rect x='1' y='1' width='2' height='2' fill='#5a5a5a'/>
+      <rect x='13' y='1' width='2' height='2' fill='#5a5a5a'/>
+    </g>
+    <g id='mt-b'>
+      <rect x='0' y='0' width='16' height='9' fill='#8b6a3e'/>
+      <rect x='2' y='2' width='12' height='4' fill='#b88a4e'/>
+      <rect x='4' y='2' width='3' height='2' fill='#d9a964'/>
+      <rect x='9' y='2' width='3' height='2' fill='#d9a964'/>
+      <rect x='2' y='9' width='12' height='2' fill='#6a4a2b'/>
+    </g>
+    <g id='tree'>
+      <rect x='0' y='0' width='14' height='9' fill='#1d7a2e'/>
+      <rect x='1' y='1' width='12' height='5' fill='#2f9b44'/>
+      <rect x='3' y='2' width='6' height='2' fill='#4fbc61'/>
+      <rect x='2' y='7' width='10' height='2' fill='#145621'/>
+      <rect x='5' y='9' width='2' height='3' fill='#8a5a2b'/>
+    </g>
+  </defs>
+  <g>
+    <use href='#mt-a' x='0' y='0'/>
+    <use href='#mt-a' x='16' y='0'/>
+    <use href='#mt-a' x='32' y='0'/>
+    <use href='#mt-a' x='48' y='0'/>
+    <use href='#mt-a' x='64' y='0'/>
+
+    <use href='#mt-a' x='0' y='16'/>
+    <use href='#mt-a' x='16' y='16'/>
+    <use href='#mt-a' x='32' y='16'/>
+    <use href='#mt-a' x='48' y='16'/>
+    <use href='#mt-a' x='64' y='16'/>
+    <use href='#mt-a' x='80' y='16'/>
+
+    <use href='#mt-a' x='0' y='32'/>
+    <use href='#mt-a' x='16' y='32'/>
+    <use href='#mt-a' x='32' y='32'/>
+    <use href='#mt-a' x='48' y='32'/>
+    <use href='#mt-a' x='64' y='32'/>
+
+    <use href='#mt-a' x='0' y='48'/>
+    <use href='#mt-a' x='16' y='48'/>
+    <use href='#mt-a' x='32' y='48'/>
+    <use href='#mt-a' x='48' y='48'/>
+
+    <use href='#mt-a' x='0' y='64'/>
+    <use href='#mt-a' x='16' y='64'/>
+    <use href='#mt-a' x='32' y='64'/>
+
+    <use href='#mt-b' x='112' y='80'/>
+    <use href='#mt-b' x='128' y='80'/>
+    <use href='#mt-b' x='144' y='80'/>
+    <use href='#mt-b' x='160' y='80'/>
+
+    <use href='#mt-b' x='112' y='96'/>
+    <use href='#mt-b' x='128' y='96'/>
+    <use href='#mt-b' x='144' y='96'/>
+    <use href='#mt-b' x='160' y='96'/>
+    <use href='#mt-b' x='176' y='96'/>
+
+    <use href='#mt-b' x='96' y='112'/>
+    <use href='#mt-b' x='112' y='112'/>
+    <use href='#mt-b' x='128' y='112'/>
+    <use href='#mt-b' x='144' y='112'/>
+    <use href='#mt-b' x='160' y='112'/>
+    <use href='#mt-b' x='176' y='112'/>
+
+    <use href='#mt-a' x='0' y='176'/>
+    <use href='#mt-a' x='16' y='176'/>
+    <use href='#mt-a' x='32' y='176'/>
+    <use href='#mt-a' x='48' y='176'/>
+    <use href='#mt-a' x='64' y='176'/>
+
+    <use href='#mt-a' x='0' y='192'/>
+    <use href='#mt-a' x='16' y='192'/>
+    <use href='#mt-a' x='32' y='192'/>
+    <use href='#mt-a' x='48' y='192'/>
+
+    <use href='#mt-a' x='0' y='208'/>
+    <use href='#mt-a' x='16' y='208'/>
+    <use href='#mt-a' x='32' y='208'/>
+
+    <use href='#mt-a' x='0' y='224'/>
+    <use href='#mt-a' x='16' y='224'/>
+
+    <use href='#tree' x='128' y='0'/>
+    <use href='#tree' x='144' y='0'/>
+    <use href='#tree' x='160' y='0'/>
+    <use href='#tree' x='176' y='0'/>
+    <use href='#tree' x='192' y='0'/>
+    <use href='#tree' x='208' y='0'/>
+    <use href='#tree' x='224' y='0'/>
+    <use href='#tree' x='240' y='0'/>
+
+    <use href='#tree' x='128' y='16'/>
+    <use href='#tree' x='144' y='16'/>
+    <use href='#tree' x='160' y='16'/>
+    <use href='#tree' x='176' y='16'/>
+    <use href='#tree' x='192' y='16'/>
+    <use href='#tree' x='208' y='16'/>
+    <use href='#tree' x='224' y='16'/>
+    <use href='#tree' x='240' y='16'/>
+
+    <use href='#tree' x='128' y='32'/>
+    <use href='#tree' x='144' y='32'/>
+    <use href='#tree' x='160' y='32'/>
+    <use href='#tree' x='176' y='32'/>
+    <use href='#tree' x='192' y='32'/>
+    <use href='#tree' x='208' y='32'/>
+    <use href='#tree' x='224' y='32'/>
+    <use href='#tree' x='240' y='32'/>
+
+    <use href='#tree' x='144' y='48'/>
+    <use href='#tree' x='160' y='48'/>
+    <use href='#tree' x='176' y='48'/>
+    <use href='#tree' x='192' y='48'/>
+    <use href='#tree' x='208' y='48'/>
+    <use href='#tree' x='224' y='48'/>
+    <use href='#tree' x='240' y='48'/>
+
+    <use href='#tree' x='144' y='64'/>
+    <use href='#tree' x='160' y='64'/>
+    <use href='#tree' x='176' y='64'/>
+    <use href='#tree' x='192' y='64'/>
+    <use href='#tree' x='208' y='64'/>
+    <use href='#tree' x='224' y='64'/>
+    <use href='#tree' x='240' y='64'/>
+
+    <use href='#tree' x='192' y='80'/>
+    <use href='#tree' x='208' y='80'/>
+    <use href='#tree' x='224' y='80'/>
+    <use href='#tree' x='240' y='80'/>
+
+    <use href='#tree' x='192' y='96'/>
+    <use href='#tree' x='208' y='96'/>
+    <use href='#tree' x='224' y='96'/>
+    <use href='#tree' x='240' y='96'/>
+
+    <use href='#tree' x='192' y='112'/>
+    <use href='#tree' x='208' y='112'/>
+    <use href='#tree' x='224' y='112'/>
+    <use href='#tree' x='240' y='112'/>
+
+    <use href='#tree' x='192' y='128'/>
+    <use href='#tree' x='208' y='128'/>
+    <use href='#tree' x='224' y='128'/>
+    <use href='#tree' x='240' y='128'/>
+
+    <use href='#tree' x='144' y='160'/>
+    <use href='#tree' x='160' y='160'/>
+    <use href='#tree' x='176' y='160'/>
+    <use href='#tree' x='192' y='160'/>
+    <use href='#tree' x='208' y='160'/>
+    <use href='#tree' x='224' y='160'/>
+    <use href='#tree' x='240' y='160'/>
+
+    <use href='#tree' x='160' y='176'/>
+    <use href='#tree' x='176' y='176'/>
+    <use href='#tree' x='192' y='176'/>
+    <use href='#tree' x='208' y='176'/>
+    <use href='#tree' x='224' y='176'/>
+    <use href='#tree' x='240' y='176'/>
+
+    <use href='#tree' x='176' y='192'/>
+    <use href='#tree' x='192' y='192'/>
+    <use href='#tree' x='208' y='192'/>
+    <use href='#tree' x='224' y='192'/>
+    <use href='#tree' x='240' y='192'/>
+
+    <use href='#tree' x='176' y='208'/>
+    <use href='#tree' x='192' y='208'/>
+    <use href='#tree' x='208' y='208'/>
+    <use href='#tree' x='224' y='208'/>
+    <use href='#tree' x='240' y='208'/>
+
+    <use href='#tree' x='192' y='224'/>
+    <use href='#tree' x='208' y='224'/>
+    <use href='#tree' x='224' y='224'/>
+    <use href='#tree' x='240' y='224'/>
+  </g>
+</svg>

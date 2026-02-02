@@ -1,0 +1,29 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256' viewBox='0 0 256 256' shape-rendering='crispEdges'>
+  <rect x='0' y='144' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='0' y='144' width='2' height='16' fill='#0a3c7a'/>
+
+  <rect x='16' y='144' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='32' y='144' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='48' y='144' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='53' y='149' width='4' height='2' fill='#8fd0ff'/>
+
+  <rect x='64' y='144' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='80' y='144' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='96' y='144' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='112' y='144' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='117' y='149' width='4' height='2' fill='#8fd0ff'/>
+
+  <rect x='128' y='128' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='144' y='128' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='149' y='133' width='4' height='2' fill='#8fd0ff'/>
+
+  <rect x='160' y='128' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='176' y='128' width='16' height='16' fill='#5fb5ff'/>
+
+  <rect x='192' y='144' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='208' y='144' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='224' y='144' width='16' height='16' fill='#1e6cc4'/>
+  <rect x='240' y='144' width='16' height='16' fill='#5fb5ff'/>
+  <rect x='245' y='149' width='4' height='2' fill='#8fd0ff'/>
+  <rect x='254' y='144' width='2' height='16' fill='#0a3c7a'/>
+</svg>

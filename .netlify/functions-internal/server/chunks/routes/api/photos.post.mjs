@@ -1,0 +1,105 @@
+import { d as defineEventHandler, e as readMultipartFormData, c as createError } from '../../nitro/nitro.mjs';
+import { extname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { g as getS3Config, a as getS3Client, n as normalizePrefix } from '../../_/s3.mjs';
+import 'lru-cache';
+import '@unocss/core';
+import '@unocss/preset-wind3';
+import 'devalue';
+import 'consola';
+import 'unhead';
+import 'node:http';
+import 'node:https';
+import 'node:events';
+import 'node:buffer';
+import 'node:fs';
+import 'vue';
+import 'unhead/server';
+import 'unhead/plugins';
+import 'unhead/utils';
+import 'vue-bundle-renderer/runtime';
+import 'vue/server-renderer';
+
+const MAX_FILES = 20;
+const MAX_FILE_MB = 20;
+const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024;
+const ALLOWED_TYPES = /* @__PURE__ */ new Set([
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime"
+]);
+const ALLOWED_EXTS = /* @__PURE__ */ new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".heic",
+  ".heif",
+  ".webp",
+  ".mp4",
+  ".mov"
+]);
+const ensureExtension = (filename, mimeType) => {
+  const ext = extname(filename || "").toLowerCase();
+  if (ext) return ext;
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "image/webp") return ".webp";
+  if (mimeType === "image/heic") return ".heic";
+  if (mimeType === "image/heif") return ".heif";
+  if (mimeType === "video/mp4") return ".mp4";
+  if (mimeType === "video/quicktime") return ".mov";
+  return "";
+};
+const photos_post = defineEventHandler(async (event) => {
+  const form = await readMultipartFormData(event);
+  if (!form) {
+    throw createError({ statusCode: 400, statusMessage: "Missing form data" });
+  }
+  const files = form.filter((part) => part.filename && part.data && Buffer.isBuffer(part.data));
+  const senderField = form.find((part) => part.name === "name" && !part.filename);
+  const senderName = typeof (senderField == null ? void 0 : senderField.data) === "string" ? senderField.data.trim().slice(0, 50) : "";
+  const senderMetadata = senderName ? encodeURIComponent(senderName) : "";
+  if (!files.length) {
+    throw createError({ statusCode: 400, statusMessage: "No files uploaded" });
+  }
+  if (files.length > MAX_FILES) {
+    throw createError({ statusCode: 400, statusMessage: `Too many files (max ${MAX_FILES})` });
+  }
+  const { region, bucket, prefix } = getS3Config();
+  const s3 = getS3Client(region);
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+  const normalizedPrefix = normalizePrefix(prefix);
+  const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today;
+  for (const file of files) {
+    const mimeType = file.type || "";
+    const rawExt = extname(file.filename || "").toLowerCase();
+    const isAllowed = ALLOWED_TYPES.has(mimeType) || ALLOWED_EXTS.has(rawExt);
+    if (!isAllowed) {
+      throw createError({ statusCode: 400, statusMessage: "Unsupported file type" });
+    }
+    const data = file.data;
+    if (data.length > MAX_FILE_SIZE) {
+      throw createError({ statusCode: 400, statusMessage: `File too large (max ${MAX_FILE_MB}MB)` });
+    }
+    const ext = ensureExtension(file.filename || "", mimeType);
+    const fileName = `${Date.now()}-${randomUUID()}${ext}`;
+    const objectKey = `${folderKey}/${fileName}`;
+    await s3.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: objectKey,
+      Body: data,
+      ContentType: mimeType || void 0,
+      CacheControl: "public, max-age=31536000",
+      Metadata: senderMetadata ? { sender: senderMetadata } : void 0
+    }));
+  }
+  return { ok: true, count: files.length };
+});
+
+export { photos_post as default };
+//# sourceMappingURL=photos.post.mjs.map
