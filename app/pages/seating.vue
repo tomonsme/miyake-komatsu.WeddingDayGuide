@@ -26,8 +26,21 @@
             {{ isFullscreen ? '閉じる' : '全画面で見る' }}
           </button>
         </div>
-        <div class="seating-scroll" :class="{ 'seating-scroll--fullscreen': isFullscreen }">
-        <div class="seating-sheet">
+        <div
+          ref="seatingScrollRef"
+          class="seating-scroll"
+          :class="{ 'seating-scroll--fullscreen': isFullscreen }"
+          @pointerdown="onPointerDown"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
+          @touchstart="onTouchStart"
+          @touchmove.prevent="onTouchMove"
+          @touchend="onTouchEnd"
+          @touchcancel="onTouchEnd"
+          @wheel.prevent="onWheel"
+        >
+        <div ref="seatingSheetRef" class="seating-sheet">
           <div class="seating-header">
             <div class="seating-header__left">
               <p class="seating-kicker-row">
@@ -157,6 +170,21 @@ const isFullscreen = ref(false)
 const isToggling = ref(false)
 const lockRequestId = ref(0)
 const seatingShellRef = ref<HTMLElement | null>(null)
+const seatingScrollRef = ref<HTMLElement | null>(null)
+const seatingSheetRef = ref<HTMLElement | null>(null)
+const panX = ref(0)
+const panY = ref(0)
+const zoom = ref(1)
+const pointers = new Map<number, { x: number; y: number }>()
+let dragStart = { x: 0, y: 0 }
+let panStart = { x: 0, y: 0 }
+let zoomStart = 1
+let pinchStartDistance = 0
+let pinchStartCenter = { x: 0, y: 0 }
+const MIN_ZOOM = 0.8
+const MAX_ZOOM = 2.2
+const DOUBLE_TAP_DELAY = 300
+let lastTapAt = 0
 const tableRows = computed<SeatingRowItem[][]>(() => {
   const cols = 4
   const ordered = [...tables.value]
@@ -224,6 +252,255 @@ function seatingClass(table: SeatingTable) {
 function seatSuffix(seat: { suffix?: string }) {
   if (seat.suffix === '') return ''
   return seat.suffix ?? '様'
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function getBaseScale() {
+  if (!process.client || !seatingShellRef.value) return 1
+  const value = getComputedStyle(seatingShellRef.value).getPropertyValue('--seating-scale')
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+}
+
+function clampPan(nextX: number, nextY: number, nextZoom: number) {
+  const scrollEl = seatingScrollRef.value
+  const sheetEl = seatingSheetRef.value
+  if (!scrollEl || !sheetEl) return { x: nextX, y: nextY }
+  const baseScale = getBaseScale()
+  const totalScale = baseScale * nextZoom
+  const scaledWidth = sheetEl.offsetWidth * totalScale
+  const scaledHeight = sheetEl.offsetHeight * totalScale
+  const viewWidth = scrollEl.clientWidth
+  const viewHeight = scrollEl.clientHeight
+  const maxX = Math.max(0, (scaledWidth - viewWidth) / 2)
+  const maxY = Math.max(0, (scaledHeight - viewHeight) / 2)
+  return {
+    x: clamp(nextX, -maxX, maxX),
+    y: clamp(nextY, -maxY, maxY)
+  }
+}
+
+function applyTransform(nextX: number, nextY: number, nextZoom: number, shouldClamp = true) {
+  const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+  const clamped = shouldClamp ? clampPan(nextX, nextY, clampedZoom) : { x: nextX, y: nextY }
+  panX.value = clamped.x
+  panY.value = clamped.y
+  zoom.value = clampedZoom
+  const shell = seatingShellRef.value
+  if (!shell) return
+  shell.style.setProperty('--seating-offset-x', `${panX.value}px`)
+  shell.style.setProperty('--seating-offset-y', `${panY.value}px`)
+  shell.style.setProperty('--seating-zoom', String(zoom.value))
+}
+
+function getDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+function getCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
+function onPointerDown(event: PointerEvent) {
+  if (!seatingScrollRef.value) return
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+  seatingScrollRef.value.setPointerCapture(event.pointerId)
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  if (pointers.size === 1) {
+    dragStart = { x: event.clientX, y: event.clientY }
+    panStart = { x: panX.value, y: panY.value }
+    zoomStart = zoom.value
+    pinchStartDistance = 0
+  } else if (pointers.size === 2) {
+    const [p1, p2] = Array.from(pointers.values())
+    pinchStartDistance = getDistance(p1, p2)
+    pinchStartCenter = getCenter(p1, p2)
+    panStart = { x: panX.value, y: panY.value }
+    zoomStart = zoom.value
+  }
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (!pointers.has(event.pointerId)) return
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  if (pointers.size === 1) {
+    const point = Array.from(pointers.values())[0]
+    const dx = point.x - dragStart.x
+    const dy = point.y - dragStart.y
+    applyTransform(panStart.x + dx, panStart.y + dy, zoom.value)
+    return
+  }
+  if (pointers.size === 2) {
+    const [p1, p2] = Array.from(pointers.values())
+    if (!pinchStartDistance) return
+    const distance = getDistance(p1, p2)
+    const rawZoom = zoomStart * (distance / pinchStartDistance)
+    const nextZoom = clamp(rawZoom, MIN_ZOOM, MAX_ZOOM)
+    const center = getCenter(p1, p2)
+    const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
+    const scrollRect = seatingScrollRef.value?.getBoundingClientRect()
+    if (!scrollRect) {
+      applyTransform(panStart.x + deltaCenter.x, panStart.y + deltaCenter.y, nextZoom)
+      return
+    }
+    const centerX = center.x - scrollRect.left - scrollRect.width / 2
+    const centerY = center.y - scrollRect.top - scrollRect.height / 2
+    const scaleChange = nextZoom / zoomStart
+    const nextX = panStart.x + deltaCenter.x + centerX * (1 - scaleChange)
+    const nextY = panStart.y + deltaCenter.y + centerY * (1 - scaleChange)
+    applyTransform(nextX, nextY, nextZoom)
+  }
+}
+
+function onPointerUp(event: PointerEvent) {
+  if (!seatingScrollRef.value) return
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+  if (seatingScrollRef.value.hasPointerCapture(event.pointerId)) {
+    seatingScrollRef.value.releasePointerCapture(event.pointerId)
+  }
+  if (!pointers.has(event.pointerId)) return
+  pointers.delete(event.pointerId)
+  if (pointers.size === 1) {
+    const point = Array.from(pointers.values())[0]
+    dragStart = { x: point.x, y: point.y }
+    panStart = { x: panX.value, y: panY.value }
+    zoomStart = zoom.value
+  } else if (pointers.size === 0) {
+    pinchStartDistance = 0
+  }
+}
+
+function onTouchStart(event: TouchEvent) {
+  if (event.cancelable) event.preventDefault()
+  if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+  if (event.touches.length === 1) {
+    const touch = event.touches[0]
+    dragStart = { x: touch.clientX, y: touch.clientY }
+    panStart = { x: panX.value, y: panY.value }
+    zoomStart = zoom.value
+    pinchStartDistance = 0
+    return
+  }
+  if (event.touches.length === 2) {
+    const [t1, t2] = Array.from(event.touches)
+    pinchStartDistance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
+    pinchStartCenter = getCenter({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
+    panStart = { x: panX.value, y: panY.value }
+    zoomStart = zoom.value
+  }
+}
+
+function onTouchMove(event: TouchEvent) {
+  if (event.cancelable) event.preventDefault()
+  if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+  if (event.touches.length === 1) {
+    const touch = event.touches[0]
+    const dx = touch.clientX - dragStart.x
+    const dy = touch.clientY - dragStart.y
+    applyTransform(panStart.x + dx, panStart.y + dy, zoom.value)
+    return
+  }
+  if (event.touches.length === 2) {
+    const [t1, t2] = Array.from(event.touches)
+    if (!pinchStartDistance) return
+    const distance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
+    const rawZoom = zoomStart * (distance / pinchStartDistance)
+    const nextZoom = clamp(rawZoom, MIN_ZOOM, MAX_ZOOM)
+    const center = getCenter({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
+    const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
+    const scrollRect = seatingScrollRef.value?.getBoundingClientRect()
+    if (!scrollRect) {
+      applyTransform(panStart.x + deltaCenter.x, panStart.y + deltaCenter.y, nextZoom)
+      return
+    }
+    const centerX = center.x - scrollRect.left - scrollRect.width / 2
+    const centerY = center.y - scrollRect.top - scrollRect.height / 2
+    const scaleChange = nextZoom / zoomStart
+    const nextX = panStart.x + deltaCenter.x + centerX * (1 - scaleChange)
+    const nextY = panStart.y + deltaCenter.y + centerY * (1 - scaleChange)
+    applyTransform(nextX, nextY, nextZoom)
+  }
+}
+
+function onTouchEnd(event: TouchEvent) {
+  if (event.cancelable) event.preventDefault()
+  if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+  if (event.touches.length === 1) {
+    const touch = event.touches[0]
+    dragStart = { x: touch.clientX, y: touch.clientY }
+    panStart = { x: panX.value, y: panY.value }
+    zoomStart = zoom.value
+    return
+  }
+  if (event.touches.length === 0) {
+    pinchStartDistance = 0
+  }
+}
+
+function preventGesture(event: Event) {
+  event.preventDefault()
+}
+
+function isInsideSeating(event: Event) {
+  const root = seatingScrollRef.value
+  if (!root) return false
+  if (event.composedPath) {
+    return event.composedPath().includes(root)
+  }
+  const target = event.target as Node | null
+  return target ? root.contains(target) : false
+}
+
+function handleDocumentTouchStart(event: TouchEvent) {
+  if (!isInsideSeating(event)) return
+  if (event.touches.length > 1 && event.cancelable) {
+    event.preventDefault()
+  }
+}
+
+function handleDocumentTouchMove(event: TouchEvent) {
+  if (!isInsideSeating(event)) return
+  if (event.cancelable) event.preventDefault()
+}
+
+function handleDocumentTouchEnd(event: TouchEvent) {
+  if (!isInsideSeating(event)) return
+  const now = Date.now()
+  if (now - lastTapAt < DOUBLE_TAP_DELAY && event.cancelable) {
+    event.preventDefault()
+  }
+  lastTapAt = now
+}
+
+function handleDocumentGesture(event: Event) {
+  if (!isInsideSeating(event)) return
+  event.preventDefault()
+}
+
+function onWheel(event: WheelEvent) {
+  if (!seatingScrollRef.value) return
+  if (event.ctrlKey) {
+    const zoomFactor = Math.exp(-event.deltaY * 0.002)
+    const nextZoom = clamp(zoom.value * zoomFactor, MIN_ZOOM, MAX_ZOOM)
+    const rect = seatingScrollRef.value.getBoundingClientRect()
+    const centerX = event.clientX - rect.left - rect.width / 2
+    const centerY = event.clientY - rect.top - rect.height / 2
+    const scaleChange = nextZoom / zoom.value
+    const nextX = panX.value + centerX * (1 - scaleChange)
+    const nextY = panY.value + centerY * (1 - scaleChange)
+    applyTransform(nextX, nextY, nextZoom)
+    return
+  }
+  applyTransform(panX.value - event.deltaX, panY.value - event.deltaY, zoom.value)
+}
+
+const handleResize = () => {
+  applyTransform(panX.value, panY.value, zoom.value)
 }
 
 async function lockOrientation(requestId: number) {
@@ -313,18 +590,40 @@ const handleFullscreenChange = () => {
 watch(isFullscreen, (value) => {
   if (!process.client) return
   document.body.style.overflow = value ? 'hidden' : ''
+  requestAnimationFrame(() => applyTransform(panX.value, panY.value, zoom.value))
 })
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   document.addEventListener('fullscreenchange', handleFullscreenChange)
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+  window.addEventListener('resize', handleResize)
+  seatingScrollRef.value?.addEventListener('gesturestart', preventGesture, { passive: false } as AddEventListenerOptions)
+  seatingScrollRef.value?.addEventListener('gesturechange', preventGesture, { passive: false } as AddEventListenerOptions)
+  seatingScrollRef.value?.addEventListener('gestureend', preventGesture, { passive: false } as AddEventListenerOptions)
+  document.addEventListener('touchstart', handleDocumentTouchStart, { passive: false, capture: true })
+  document.addEventListener('touchmove', handleDocumentTouchMove, { passive: false, capture: true })
+  document.addEventListener('touchend', handleDocumentTouchEnd, { passive: false, capture: true })
+  document.addEventListener('gesturestart', handleDocumentGesture, { passive: false, capture: true })
+  document.addEventListener('gesturechange', handleDocumentGesture, { passive: false, capture: true })
+  document.addEventListener('gestureend', handleDocumentGesture, { passive: false, capture: true })
+  requestAnimationFrame(() => applyTransform(panX.value, panY.value, zoom.value))
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  window.removeEventListener('resize', handleResize)
+  seatingScrollRef.value?.removeEventListener('gesturestart', preventGesture as EventListener)
+  seatingScrollRef.value?.removeEventListener('gesturechange', preventGesture as EventListener)
+  seatingScrollRef.value?.removeEventListener('gestureend', preventGesture as EventListener)
+  document.removeEventListener('touchstart', handleDocumentTouchStart, true)
+  document.removeEventListener('touchmove', handleDocumentTouchMove, true)
+  document.removeEventListener('touchend', handleDocumentTouchEnd, true)
+  document.removeEventListener('gesturestart', handleDocumentGesture, true)
+  document.removeEventListener('gesturechange', handleDocumentGesture, true)
+  document.removeEventListener('gestureend', handleDocumentGesture, true)
   if (process.client) document.body.style.overflow = ''
   unlockOrientation()
 })

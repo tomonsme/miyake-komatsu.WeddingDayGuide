@@ -1362,7 +1362,13 @@
   }
   @screen sm { .profile-table td { font-size: clamp(0.8rem, 1.2vw, 0.95rem); } }
 
-  .seating-shell { position: relative; --seating-scale: 0.92; }
+  .seating-shell {
+    position: relative;
+    --seating-scale: 0.92;
+    --seating-zoom: 1;
+    --seating-offset-x: 0px;
+    --seating-offset-y: 0px;
+  }
   .seating-shell--fullscreen {
     position: fixed;
     inset: 0;
@@ -1408,10 +1414,22 @@
     min-height: 40px;
   }
   .seating-fullscreen-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(220,192,142,.45); }
-  .seating-scroll { overflow-x: auto; padding-bottom: 0.25rem; }
+  .seating-scroll {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    overflow: hidden;
+    padding-bottom: 0.25rem;
+    touch-action: none;
+    user-select: none;
+    overscroll-behavior: contain;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
   .seating-scroll--fullscreen {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
     padding-bottom: 0;
     -webkit-overflow-scrolling: touch;
   }
@@ -1424,8 +1442,10 @@
     border: 1px solid rgba(var(--gold), .4);
     box-shadow: 0 30px 70px -45px rgba(0,0,0,.5);
     color: #2b2a28;
-    transform: scale(var(--seating-scale));
+    transform: translate(var(--seating-offset-x), var(--seating-offset-y))
+      scale(calc(var(--seating-scale) * var(--seating-zoom)));
     transform-origin: top center;
+    will-change: transform;
   }
   .seating-sheet::before {
     content: '';

@@ -5,7 +5,7 @@
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-white/85">Notes</p>
           <h1 class="mt-2 font-display text-3xl text-gold">お願い</h1>
-          <p class="mt-2 text-sm text-white/85">当日のご注意</p>
+          <p class="mt-2 text-sm text-white/85">みなさまへのお願い</p>
         </div>
         <NuxtLink to="/" class="btn-secondary btn-sm justify-center">ホームへ戻る</NuxtLink>
       </div>
@@ -19,7 +19,7 @@
                   <p class="text-xs uppercase tracking-[0.3em] text-white/80">{{ note.title }}</p>
                   <span class="text-[10px] uppercase tracking-[0.28em] text-white/50">Note {{ i + 1 }}</span>
                 </div>
-                <p class="mt-3 text-sm leading-relaxed text-white/90">{{ note.body }}</p>
+                <p class="mt-3 text-sm leading-relaxed text-white/90 whitespace-pre-line">{{ note.body }}</p>
               </div>
             </div>
           </div>

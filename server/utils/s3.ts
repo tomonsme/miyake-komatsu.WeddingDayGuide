@@ -57,7 +57,11 @@ export const getS3Client = (config: Pick<S3Config, 'region' | 'accessKeyId' | 's
     const credentials = accessKeyId && secretAccessKey
       ? { accessKeyId, secretAccessKey, sessionToken: sessionToken || undefined }
       : undefined
-    cachedClient = new S3Client({ region, credentials })
+    cachedClient = new S3Client({
+      region,
+      credentials,
+      requestChecksumCalculation: 'WHEN_REQUIRED'
+    })
     cachedKey = cacheKey
   }
   return cachedClient

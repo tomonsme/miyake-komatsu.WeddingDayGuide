@@ -429,7 +429,14 @@ const uploadFiles = async () => {
         body: item.file
       })
       if (!response.ok) {
-        throw new Error(`S3 upload failed (${response.status})`)
+        let detail = ''
+        try {
+          detail = await response.text()
+        } catch {
+          detail = ''
+        }
+        const message = detail ? `S3 upload failed (${response.status}): ${detail}` : `S3 upload failed (${response.status})`
+        throw new Error(message)
       }
     }
 
