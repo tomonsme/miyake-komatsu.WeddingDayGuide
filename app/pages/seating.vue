@@ -182,8 +182,14 @@ const tableRows = computed<SeatingRowItem[][]>(() => {
   }
   return rows
 })
-const groomName = computed(() => profile.value?.groom?.name ?? '')
-const brideName = computed(() => profile.value?.bride?.name ?? '')
+function toGivenName(fullName?: string) {
+  if (!fullName) return ''
+  const parts = fullName.trim().split(/\s+/)
+  return parts[parts.length - 1] || ''
+}
+
+const groomName = computed(() => toGivenName(profile.value?.groom?.name))
+const brideName = computed(() => toGivenName(profile.value?.bride?.name))
 const dateLine = computed(() => {
   const date = displayDateParts.value?.date
   if (!date) return ''

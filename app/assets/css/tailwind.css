@@ -1362,7 +1362,7 @@
   }
   @screen sm { .profile-table td { font-size: clamp(0.8rem, 1.2vw, 0.95rem); } }
 
-  .seating-shell { position: relative; }
+  .seating-shell { position: relative; --seating-scale: 0.92; }
   .seating-shell--fullscreen {
     position: fixed;
     inset: 0;
@@ -1372,6 +1372,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    --seating-scale: 1;
   }
   .seating-controls {
     display: flex;
@@ -1423,6 +1424,8 @@
     border: 1px solid rgba(var(--gold), .4);
     box-shadow: 0 30px 70px -45px rgba(0,0,0,.5);
     color: #2b2a28;
+    transform: scale(var(--seating-scale));
+    transform-origin: top center;
   }
   .seating-sheet::before {
     content: '';
