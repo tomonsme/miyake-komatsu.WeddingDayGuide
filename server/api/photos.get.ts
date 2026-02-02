@@ -7,52 +7,67 @@ import { getS3Client, getS3Config, normalizePrefix, toPublicUrl } from '../utils
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'])
 
 const isImageKey = (key: string) => IMAGE_EXTS.has(extname(key).toLowerCase())
+const toErrorPayload = (err: unknown) => {
+  if (err instanceof Error) return { name: err.name, message: err.message }
+  return { message: String(err) }
+}
 
 export default defineEventHandler(async (event) => {
-  const config = getS3Config()
-  const { region, bucket, prefix, publicBaseUrl } = config
-  const s3 = getS3Client(config)
-  const rawLimit = Number(getQuery(event).limit ?? 40)
-  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 40
-  const normalizedPrefix = normalizePrefix(prefix)
-  const listPrefix = normalizedPrefix ? `${normalizedPrefix}/` : undefined
-
-  const objects: { Key?: string; LastModified?: Date }[] = []
-  let token: string | undefined
-
   try {
-    do {
-      const response = await s3.send(new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: listPrefix,
-        ContinuationToken: token
+    const config = getS3Config()
+    const { region, bucket, prefix, publicBaseUrl } = config
+    const s3 = getS3Client(config)
+    const rawLimit = Number(getQuery(event).limit ?? 40)
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 40
+    const normalizedPrefix = normalizePrefix(prefix)
+    const listPrefix = normalizedPrefix ? `${normalizedPrefix}/` : undefined
+
+    const objects: { Key?: string; LastModified?: Date }[] = []
+    let token: string | undefined
+
+    try {
+      do {
+        const response = await s3.send(new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: listPrefix,
+          ContinuationToken: token
+        }))
+        if (response.Contents) objects.push(...response.Contents)
+        token = response.IsTruncated ? response.NextContinuationToken : undefined
+      } while (token)
+    } catch (err) {
+      console.error('photos.get list failed', {
+        ...toErrorPayload(err),
+        bucket,
+        region,
+        prefix: listPrefix || ''
+      })
+      throw createError({ statusCode: 500, statusMessage: 'Failed to list photos' })
+    }
+
+    const candidates = objects
+      .filter((item) => item.Key && isImageKey(item.Key))
+      .map((item) => ({
+        key: item.Key as string,
+        lastModified: item.LastModified?.toISOString() || ''
       }))
-      if (response.Contents) objects.push(...response.Contents)
-      token = response.IsTruncated ? response.NextContinuationToken : undefined
-    } while (token)
+      .sort((a, b) => b.lastModified.localeCompare(a.lastModified))
+      .slice(0, limit)
+
+    const items = publicBaseUrl
+      ? candidates.map((item) => ({ ...item, url: toPublicUrl(publicBaseUrl, item.key) }))
+      : await Promise.all(candidates.map(async (item) => ({
+        ...item,
+        url: await getSignedUrl(
+          s3,
+          new GetObjectCommand({ Bucket: bucket, Key: item.key }),
+          { expiresIn: 60 * 60 }
+        )
+      })))
+
+    return { items }
   } catch (err) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to list photos' })
+    console.error('photos.get failed', toErrorPayload(err))
+    throw err
   }
-
-  const candidates = objects
-    .filter((item) => item.Key && isImageKey(item.Key))
-    .map((item) => ({
-      key: item.Key as string,
-      lastModified: item.LastModified?.toISOString() || ''
-    }))
-    .sort((a, b) => b.lastModified.localeCompare(a.lastModified))
-    .slice(0, limit)
-
-  const items = publicBaseUrl
-    ? candidates.map((item) => ({ ...item, url: toPublicUrl(publicBaseUrl, item.key) }))
-    : await Promise.all(candidates.map(async (item) => ({
-      ...item,
-      url: await getSignedUrl(
-        s3,
-        new GetObjectCommand({ Bucket: bucket, Key: item.key }),
-        { expiresIn: 60 * 60 }
-      )
-    })))
-
-  return { items }
 })

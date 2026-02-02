@@ -34,6 +34,11 @@ const ALLOWED_EXTS = new Set([
   '.mov'
 ])
 
+const toErrorPayload = (err: unknown) => {
+  if (err instanceof Error) return { name: err.name, message: err.message }
+  return { message: String(err) }
+}
+
 const ensureExtension = (filename: string, mimeType: string) => {
   const ext = extname(filename || '').toLowerCase()
   if (ext) return ext
@@ -48,53 +53,74 @@ const ensureExtension = (filename: string, mimeType: string) => {
 }
 
 export default defineEventHandler(async (event) => {
-  const form = await readMultipartFormData(event)
-  if (!form) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing form data' })
-  }
-
-  const files = form.filter((part) => part.filename && part.data && Buffer.isBuffer(part.data)) as UploadPart[]
-  const senderField = form.find((part) => part.name === 'name' && !part.filename)
-  const senderName = typeof senderField?.data === 'string' ? senderField.data.trim().slice(0, 50) : ''
-  const senderMetadata = senderName ? encodeURIComponent(senderName) : ''
-  if (!files.length) {
-    throw createError({ statusCode: 400, statusMessage: 'No files uploaded' })
-  }
-
-  if (files.length > MAX_FILES) {
-    throw createError({ statusCode: 400, statusMessage: `Too many files (max ${MAX_FILES})` })
-  }
-
-  const config = getS3Config()
-  const { region, bucket, prefix } = config
-  const s3 = getS3Client(config)
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  const normalizedPrefix = normalizePrefix(prefix)
-  const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
-
-  for (const file of files) {
-    const mimeType = file.type || ''
-    const rawExt = extname(file.filename || '').toLowerCase()
-    const isAllowed = ALLOWED_TYPES.has(mimeType) || ALLOWED_EXTS.has(rawExt)
-    if (!isAllowed) {
-      throw createError({ statusCode: 400, statusMessage: 'Unsupported file type' })
+  try {
+    const form = await readMultipartFormData(event)
+    if (!form) {
+      throw createError({ statusCode: 400, statusMessage: 'Missing form data' })
     }
-    const data = file.data as Buffer
-    if (data.length > MAX_FILE_SIZE) {
-      throw createError({ statusCode: 400, statusMessage: `File too large (max ${MAX_FILE_MB}MB)` })
-    }
-    const ext = ensureExtension(file.filename || '', mimeType)
-    const fileName = `${Date.now()}-${randomUUID()}${ext}`
-    const objectKey = `${folderKey}/${fileName}`
-    await s3.send(new PutObjectCommand({
-      Bucket: bucket,
-      Key: objectKey,
-      Body: data,
-      ContentType: mimeType || undefined,
-      CacheControl: 'public, max-age=31536000',
-      Metadata: senderMetadata ? { sender: senderMetadata } : undefined
-    }))
-  }
 
-  return { ok: true, count: files.length }
+    const files = form.filter((part) => part.filename && part.data && Buffer.isBuffer(part.data)) as UploadPart[]
+    const senderField = form.find((part) => part.name === 'name' && !part.filename)
+    const senderName = typeof senderField?.data === 'string' ? senderField.data.trim().slice(0, 50) : ''
+    const senderMetadata = senderName ? encodeURIComponent(senderName) : ''
+    if (!files.length) {
+      throw createError({ statusCode: 400, statusMessage: 'No files uploaded' })
+    }
+
+    if (files.length > MAX_FILES) {
+      throw createError({ statusCode: 400, statusMessage: `Too many files (max ${MAX_FILES})` })
+    }
+
+    const config = getS3Config()
+    const { region, bucket, prefix } = config
+    const s3 = getS3Client(config)
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const normalizedPrefix = normalizePrefix(prefix)
+    const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
+
+    for (const file of files) {
+      const mimeType = file.type || ''
+      const rawExt = extname(file.filename || '').toLowerCase()
+      const isAllowed = ALLOWED_TYPES.has(mimeType) || ALLOWED_EXTS.has(rawExt)
+      if (!isAllowed) {
+        throw createError({ statusCode: 400, statusMessage: 'Unsupported file type' })
+      }
+      const data = file.data as Buffer
+      if (data.length > MAX_FILE_SIZE) {
+        throw createError({ statusCode: 400, statusMessage: `File too large (max ${MAX_FILE_MB}MB)` })
+      }
+      const ext = ensureExtension(file.filename || '', mimeType)
+      const fileName = `${Date.now()}-${randomUUID()}${ext}`
+      const objectKey = `${folderKey}/${fileName}`
+      try {
+        await s3.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: objectKey,
+          Body: data,
+          ContentType: mimeType || undefined,
+          CacheControl: 'public, max-age=31536000',
+          Metadata: senderMetadata ? { sender: senderMetadata } : undefined
+        }))
+      } catch (err) {
+        console.error('photos.post put failed', {
+          ...toErrorPayload(err),
+          bucket,
+          region,
+          key: objectKey
+        })
+        throw createError({ statusCode: 500, statusMessage: 'Failed to upload photo' })
+      }
+    }
+
+    return { ok: true, count: files.length }
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode
+    const statusMessage = (err as { statusMessage?: string }).statusMessage
+    console.error('photos.post failed', {
+      ...toErrorPayload(err),
+      statusCode,
+      statusMessage
+    })
+    throw err
+  }
 })

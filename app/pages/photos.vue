@@ -359,6 +359,20 @@ const nextSlide = () => {
   currentSlide.value = (currentSlide.value + 1) % slideGroups.value.length
 }
 
+const formatFetchError = (err: unknown) => {
+  const error = err as {
+    statusCode?: number
+    statusMessage?: string
+    message?: string
+    data?: { statusCode?: number; statusMessage?: string; message?: string }
+  }
+  const statusCode = error.statusCode ?? error.data?.statusCode
+  const statusMessage = error.statusMessage || error.data?.statusMessage
+  const message = error.message || error.data?.message || 'Unknown error'
+  const detail = statusCode ? `${statusCode} ${statusMessage || message}` : message
+  return { statusCode, statusMessage, message, detail }
+}
+
 const loadGallery = async () => {
   galleryState.value = 'loading'
   galleryError.value = ''
@@ -373,7 +387,9 @@ const loadGallery = async () => {
     startSlideshow()
   } catch (err) {
     galleryState.value = 'error'
-    galleryError.value = '写真の読み込みに失敗しました'
+    const info = formatFetchError(err)
+    console.error('gallery fetch failed', info, err)
+    galleryError.value = `写真の読み込みに失敗しました (${info.detail})`
   }
 }
 
@@ -396,7 +412,9 @@ const uploadFiles = async () => {
     }, 2000)
   } catch (err) {
     uploadState.value = 'error'
-    uploadError.value = '送信できませんでした'
+    const info = formatFetchError(err)
+    console.error('upload failed', info, err)
+    uploadError.value = `送信できませんでした (${info.detail})`
   }
 }
 
