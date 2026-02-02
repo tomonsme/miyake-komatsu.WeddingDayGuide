@@ -65,8 +65,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: `Too many files (max ${MAX_FILES})` })
   }
 
-  const { region, bucket, prefix } = getS3Config()
-  const s3 = getS3Client(region)
+  const config = getS3Config()
+  const { region, bucket, prefix } = config
+  const s3 = getS3Client(config)
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const normalizedPrefix = normalizePrefix(prefix)
   const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today

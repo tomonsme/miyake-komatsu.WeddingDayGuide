@@ -13,6 +13,9 @@ export default defineNuxtConfig({
     s3Bucket: process.env.S3_BUCKET || '',
     s3Prefix: process.env.S3_PREFIX || 'uploads',
     s3PublicBaseUrl: process.env.S3_PUBLIC_BASE_URL || '',
+    s3AccessKeyId: process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '',
+    s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '',
+    s3SessionToken: process.env.S3_SESSION_TOKEN || process.env.AWS_SESSION_TOKEN || '',
     inviteAccessKey: process.env.INVITE_ACCESS_KEY || '',
     public: {
       inviteAccessEnabled: Boolean(process.env.INVITE_ACCESS_KEY)

@@ -9,8 +9,9 @@ const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'])
 const isImageKey = (key: string) => IMAGE_EXTS.has(extname(key).toLowerCase())
 
 export default defineEventHandler(async (event) => {
-  const { region, bucket, prefix, publicBaseUrl } = getS3Config()
-  const s3 = getS3Client(region)
+  const config = getS3Config()
+  const { region, bucket, prefix, publicBaseUrl } = config
+  const s3 = getS3Client(config)
   const rawLimit = Number(getQuery(event).limit ?? 40)
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 40
   const normalizedPrefix = normalizePrefix(prefix)
