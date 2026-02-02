@@ -16,13 +16,20 @@ let cachedKey = ''
 
 export const getS3Config = (): S3Config => {
   const config = useRuntimeConfig()
-  const region = String(config.s3Region || '').trim()
-  const bucket = String(config.s3Bucket || '').trim()
-  const prefix = String(config.s3Prefix || 'uploads').trim()
-  const publicBaseUrl = String(config.s3PublicBaseUrl || '').trim()
-  const accessKeyId = String(config.s3AccessKeyId || '').trim()
-  const secretAccessKey = String(config.s3SecretAccessKey || '').trim()
-  const sessionToken = String(config.s3SessionToken || '').trim()
+  const env = process.env
+  const region = String(config.s3Region || env.S3_REGION || env.AWS_REGION || '').trim()
+  const bucket = String(config.s3Bucket || env.S3_BUCKET || '').trim()
+  const prefix = String(config.s3Prefix || env.S3_PREFIX || 'uploads').trim()
+  const publicBaseUrl = String(config.s3PublicBaseUrl || env.S3_PUBLIC_BASE_URL || '').trim()
+  const accessKeyId = String(
+    config.s3AccessKeyId || env.S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID || ''
+  ).trim()
+  const secretAccessKey = String(
+    config.s3SecretAccessKey || env.S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY || ''
+  ).trim()
+  const sessionToken = String(
+    config.s3SessionToken || env.S3_SESSION_TOKEN || env.AWS_SESSION_TOKEN || ''
+  ).trim()
 
   if (!region || !bucket) {
     throw createError({ statusCode: 500, statusMessage: 'S3 configuration missing' })

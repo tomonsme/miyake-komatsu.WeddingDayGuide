@@ -3,7 +3,9 @@ import { eventConfig } from '../data/event'
 
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig()
-  const requiredKey = String(config.inviteAccessKey || '').trim()
+  const requiredKey = String(
+    config.inviteAccessKey || process.env.INVITE_ACCESS_KEY || ''
+  ).trim()
   if (requiredKey) {
     const cookieKey = String(getCookie(event, 'invite_key') || '').trim()
     const headerKey = String(getHeader(event, 'x-invite-key') || '').trim()
