@@ -12,26 +12,6 @@
 
       <div class="grid gap-6">
         <div class="grid gap-4">
-          <div class="luxe-card">
-            <div class="luxe-card__inner">
-              <p class="text-xs uppercase tracking-[0.3em] text-white/80">Overview</p>
-              <h2 class="mt-2 font-display text-2xl text-gold">本日のお願いまとめ</h2>
-              <p class="mt-2 text-sm text-white/75">当日のお願い事項をまとめています。迷ったときは近くのスタッフにお声がけください。</p>
-              <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                <div
-                  v-for="(note, i) in notes"
-                  :key="`summary-${note.title}-${i}`"
-                  class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-                >
-                  <span class="flex h-7 w-7 items-center justify-center rounded-full border border-gold/40 text-[10px] text-gold/90">
-                    {{ i + 1 }}
-                  </span>
-                  <span class="text-sm text-white/85">{{ note.title }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div class="grid gap-4 md:grid-cols-2">
             <div v-for="(note, i) in notes" :key="`${note.title}-${i}`" class="luxe-card">
               <div class="luxe-card__inner">
