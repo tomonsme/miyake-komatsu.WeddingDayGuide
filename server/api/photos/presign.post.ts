@@ -58,9 +58,6 @@ const ensureExtension = (filename: string, mimeType: string) => {
 export default defineEventHandler(async (event): Promise<PresignResponse> => {
   const body = await readBody(event)
   const files = Array.isArray(body?.files) ? body.files as PresignFile[] : []
-  const senderName = typeof body?.name === 'string' ? body.name.trim().slice(0, 50) : ''
-  const senderMetadata = senderName ? encodeURIComponent(senderName) : ''
-
   if (!files.length) {
     throw createError({ statusCode: 400, statusMessage: 'No files provided' })
   }
@@ -104,16 +101,13 @@ export default defineEventHandler(async (event): Promise<PresignResponse> => {
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: objectKey,
-      ContentType: mimeType || undefined,
-      Metadata: senderMetadata ? { sender: senderMetadata } : undefined
+      ContentType: mimeType || undefined
     })
 
     const url = await getSignedUrl(s3, command, { expiresIn: 60 * 5 })
 
     const headers: Record<string, string> = {}
     if (mimeType) headers['Content-Type'] = mimeType
-    if (senderMetadata) headers['x-amz-meta-sender'] = senderMetadata
-
     uploads.push({ key: objectKey, url, headers })
   }
 

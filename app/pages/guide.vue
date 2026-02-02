@@ -369,6 +369,21 @@ const liveConnected = ref(false)
 const leaderboardError = ref('')
 const leaderboardUpdatedAt = ref<number | null>(null)
 
+const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | null => {
+  if (!payload || typeof payload !== 'object') return null
+  const data = payload as Partial<LeaderboardSnapshot>
+  if (!Array.isArray(data.tap10) || !Array.isArray(data.stop11)) return null
+  return { tap10: data.tap10, stop11: data.stop11 }
+}
+
+const applyLeaderboardSnapshot = (payload: unknown) => {
+  const normalized = normalizeLeaderboardSnapshot(payload)
+  if (!normalized) return false
+  leaderboard.value = normalized
+  leaderboardUpdatedAt.value = Date.now()
+  return true
+}
+
 const formatSeconds = (ms: number) => (ms / 1000).toFixed(2)
 const formatDelta = (ms: number) => `${formatSeconds(ms)}s`
 const lastUpdatedLabel = computed(() => {
@@ -383,8 +398,9 @@ const refreshLeaderboard = async () => {
   leaderboardError.value = ''
   try {
     const data = await $fetch<LeaderboardSnapshot>('/api/leaderboard')
-    leaderboard.value = data
-    leaderboardUpdatedAt.value = Date.now()
+    if (!applyLeaderboardSnapshot(data)) {
+      leaderboardError.value = 'ランキングを取得できませんでした'
+    }
   } catch (err) {
     leaderboardError.value = 'ランキングを取得できませんでした'
   }
@@ -417,8 +433,7 @@ const connectLeaderboardStream = () => {
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data) as LeaderboardSnapshot
-      leaderboard.value = data
-      leaderboardUpdatedAt.value = Date.now()
+      applyLeaderboardSnapshot(data)
     } catch {
       // Ignore malformed payloads.
     }
