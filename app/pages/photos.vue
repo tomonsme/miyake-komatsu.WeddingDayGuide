@@ -10,8 +10,8 @@
         <NuxtLink to="/" class="btn-secondary btn-sm justify-center whitespace-nowrap">ホームへ戻る</NuxtLink>
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div class="grid gap-3">
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <div class="grid gap-3 min-w-0">
           <div class="luxe-card">
             <div class="luxe-card__inner p-4">
               <div class="flex flex-wrap items-center gap-1 text-[10px] uppercase tracking-[0.28em] text-white/55">
@@ -125,7 +125,7 @@
           </div>
         </div>
 
-        <div class="grid gap-3">
+        <div class="grid gap-3 min-w-0">
           
           <div class="luxe-card">
             <div class="luxe-card__inner p-4">
@@ -234,8 +234,6 @@ const hasBackupLink = computed(() => {
 })
 
 const MAX_FILES = 20
-const MAX_FILE_MB = 20
-const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024
 const NAME_KEY = 'wedding-photo-sender'
 const SLIDE_GROUP_LIMIT = 11
 const SLIDE_GROUP_SIZE = 4
@@ -307,10 +305,6 @@ const addFiles = (files: FileList) => {
     const isAllowedExt = ALLOWED_EXTS.includes(ext)
     if (!isAllowedType && !isAllowedExt) {
       uploadError.value = '画像または動画のみ送信できます'
-      continue
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      uploadError.value = `1件${MAX_FILE_MB}MBまでです`
       continue
     }
     if (next.length >= MAX_FILES) {

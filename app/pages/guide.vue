@@ -372,8 +372,9 @@ const leaderboardUpdatedAt = ref<number | null>(null)
 const nowTick = ref(Date.now())
 
 const MAX_LEADERBOARD_ENTRIES = 3
-const POLL_FAST_MS = 5000
-const POLL_SLOW_MS = 15000
+const OPTIMISTIC_ENTRY_TTL_MS = 20000
+const POLL_FAST_MS = 2000
+const POLL_SLOW_MS = 6000
 const STREAM_STALE_MS = 30000
 const RECONNECT_MAX_DELAY_MS = 20000
 
@@ -387,6 +388,51 @@ const sortStopEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
   return a.createdAt - b.createdAt
 }
 
+const optimisticEntries = new Map<string, { entry: LeaderboardEntry; expiresAt: number }>()
+
+const pruneOptimisticEntries = (now = Date.now()) => {
+  for (const [id, item] of optimisticEntries.entries()) {
+    if (item.expiresAt <= now) {
+      optimisticEntries.delete(id)
+    }
+  }
+}
+
+const trackOptimisticEntry = (entry: LeaderboardEntry) => {
+  optimisticEntries.set(entry.id, { entry, expiresAt: Date.now() + OPTIMISTIC_ENTRY_TTL_MS })
+}
+
+const limitEntries = (entries: LeaderboardEntry[], game: GameId) => {
+  const list = [...entries]
+  list.sort(game === 'tap10' ? sortTapEntries : sortStopEntries)
+  return list.slice(0, MAX_LEADERBOARD_ENTRIES)
+}
+
+const reconcileLeaderboardSnapshot = (snapshot: LeaderboardSnapshot) => {
+  const now = Date.now()
+  pruneOptimisticEntries(now)
+
+  const idsInSnapshot = new Set<string>()
+  snapshot.tap10.forEach((entry) => idsInSnapshot.add(entry.id))
+  snapshot.stop11.forEach((entry) => idsInSnapshot.add(entry.id))
+  idsInSnapshot.forEach((id) => optimisticEntries.delete(id))
+
+  const mergeForGame = (game: GameId, entries: LeaderboardEntry[]) => {
+    const merged = [...entries]
+    for (const item of optimisticEntries.values()) {
+      if (item.entry.game !== game) continue
+      if (merged.some((existing) => existing.id === item.entry.id)) continue
+      merged.push(item.entry)
+    }
+    return limitEntries(merged, game)
+  }
+
+  return {
+    tap10: mergeForGame('tap10', snapshot.tap10),
+    stop11: mergeForGame('stop11', snapshot.stop11)
+  }
+}
+
 const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | null => {
   if (!payload || typeof payload !== 'object') return null
   const data = payload as Partial<LeaderboardSnapshot>
@@ -397,7 +443,7 @@ const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | n
 const applyLeaderboardSnapshot = (payload: unknown) => {
   const normalized = normalizeLeaderboardSnapshot(payload)
   if (!normalized) return false
-  leaderboard.value = normalized
+  leaderboard.value = reconcileLeaderboardSnapshot(normalized)
   leaderboardUpdatedAt.value = Date.now()
   leaderboardError.value = ''
   liveConnected.value = true
@@ -406,12 +452,11 @@ const applyLeaderboardSnapshot = (payload: unknown) => {
 
 const mergeLeaderboardEntry = (entry: LeaderboardEntry) => {
   if (!entry || (entry.game !== 'tap10' && entry.game !== 'stop11')) return false
+  trackOptimisticEntry(entry)
   const key: GameId = entry.game
   const current = leaderboard.value[key].filter((item) => item.id !== entry.id)
   current.push(entry)
-  current.sort(key === 'tap10' ? sortTapEntries : sortStopEntries)
-  const next = current.slice(0, MAX_LEADERBOARD_ENTRIES)
-  leaderboard.value = { ...leaderboard.value, [key]: next }
+  leaderboard.value = { ...leaderboard.value, [key]: limitEntries(current, key) }
   leaderboardUpdatedAt.value = Date.now()
   leaderboardError.value = ''
   liveConnected.value = true

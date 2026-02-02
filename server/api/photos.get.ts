@@ -2,11 +2,18 @@ import { createError, getQuery } from 'h3'
 import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { extname } from 'node:path'
-import { getS3Client, getS3Config, normalizePrefix, toPublicUrl } from '../utils/s3'
+import { getS3Client, getS3Config, toPublicUrl } from '../utils/s3'
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'])
 
 const isImageKey = (key: string) => IMAGE_EXTS.has(extname(key).toLowerCase())
+const shuffleInPlace = <T>(items: T[]) => {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[items[i], items[j]] = [items[j], items[i]]
+  }
+  return items
+}
 const toErrorPayload = (err: unknown) => {
   if (err instanceof Error) return { name: err.name, message: err.message }
   return { message: String(err) }
@@ -15,12 +22,11 @@ const toErrorPayload = (err: unknown) => {
 export default defineEventHandler(async (event) => {
   try {
     const config = getS3Config()
-    const { region, bucket, prefix, publicBaseUrl } = config
+    const { region, bucket, publicBaseUrl } = config
     const s3 = getS3Client(config)
     const rawLimit = Number(getQuery(event).limit ?? 40)
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 40
-    const normalizedPrefix = normalizePrefix(prefix)
-    const listPrefix = normalizedPrefix ? `${normalizedPrefix}/` : undefined
+    const listPrefix = undefined
 
     const objects: { Key?: string; LastModified?: Date }[] = []
     let token: string | undefined
@@ -51,12 +57,12 @@ export default defineEventHandler(async (event) => {
         key: item.Key as string,
         lastModified: item.LastModified?.toISOString() || ''
       }))
-      .sort((a, b) => b.lastModified.localeCompare(a.lastModified))
-      .slice(0, limit)
+    shuffleInPlace(candidates)
+    const selected = candidates.slice(0, limit)
 
     const items = publicBaseUrl
-      ? candidates.map((item) => ({ ...item, url: toPublicUrl(publicBaseUrl, item.key) }))
-      : await Promise.all(candidates.map(async (item) => ({
+      ? selected.map((item) => ({ ...item, url: toPublicUrl(publicBaseUrl, item.key) }))
+      : await Promise.all(selected.map(async (item) => ({
         ...item,
         url: await getSignedUrl(
           s3,

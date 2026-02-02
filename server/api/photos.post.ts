@@ -12,8 +12,6 @@ type UploadPart = {
 }
 
 const MAX_FILES = 20
-const MAX_FILE_MB = 20
-const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -102,9 +100,6 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Unsupported file type' })
       }
       const data = file.data as Buffer
-      if (data.length > MAX_FILE_SIZE) {
-        throw createError({ statusCode: 400, statusMessage: `File too large (max ${MAX_FILE_MB}MB)` })
-      }
       const ext = ensureExtension(file.filename || '', mimeType)
       const fileName = buildFileName(file.filename || '', ext, index)
       const objectKey = `${folderKey}/${fileName}`

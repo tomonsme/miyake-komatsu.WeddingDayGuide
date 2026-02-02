@@ -20,8 +20,6 @@ type PresignResponse = {
 }
 
 const MAX_FILES = 20
-const MAX_FILE_MB = 20
-const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -100,9 +98,6 @@ export default defineEventHandler(async (event): Promise<PresignResponse> => {
       throw createError({ statusCode: 400, statusMessage: 'Invalid file size' })
     }
 
-    if (size > MAX_FILE_SIZE) {
-      throw createError({ statusCode: 400, statusMessage: `File too large (max ${MAX_FILE_MB}MB)` })
-    }
 
     const rawExt = extname(filename).toLowerCase()
     const isAllowed = ALLOWED_TYPES.has(mimeType) || ALLOWED_EXTS.has(rawExt)
