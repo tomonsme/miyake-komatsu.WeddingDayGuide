@@ -25,7 +25,17 @@
               @click="jumpTo(item.to)"
               :aria-label="item.title"
             >
-              <img v-if="item.image" :src="item.image" alt="" class="story-card__media absolute inset-0 h-full w-full object-cover" loading="lazy" />
+              <NuxtImg
+                v-if="item.image"
+                :src="item.image"
+                alt=""
+                class="story-card__media absolute inset-0 h-full w-full object-cover"
+                width="240"
+                height="300"
+                preset="story"
+                loading="lazy"
+                decoding="async"
+              />
               <span v-if="item.image" class="story-card__overlay" aria-hidden="true"></span>
               <span v-else class="story-card__bg" aria-hidden="true"></span>
               <span class="story-card__body">

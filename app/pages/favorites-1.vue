@@ -15,10 +15,13 @@
           <p class="text-xs uppercase tracking-[0.3em] text-white/75">Album</p>
           <div class="mt-4 grid gap-4">
             <figure v-for="(photo, idx) in photos" :key="photo.src" class="overflow-hidden rounded-2xl border border-gold/20 bg-black/30">
-              <img
+              <NuxtImg
                 :src="photo.src"
                 :alt="`推しの写真 ${idx + 1}`"
                 class="aspect-[4/3] h-auto w-full object-cover"
+                width="960"
+                height="720"
+                preset="album"
                 loading="lazy"
                 decoding="async"
               />

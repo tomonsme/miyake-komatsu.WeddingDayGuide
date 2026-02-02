@@ -21,11 +21,31 @@
 
             <div class="mt-6 grid grid-cols-2 gap-4">
               <div class="text-center">
-                <img v-if="groom.image" :src="groom.image" :alt="groom.name" class="profile-photo mx-auto h-24 w-24 sm:h-28 sm:w-28" loading="lazy" decoding="async" />
+                <NuxtImg
+                  v-if="groom.image"
+                  :src="groom.image"
+                  :alt="groom.name"
+                  class="profile-photo mx-auto h-24 w-24 sm:h-28 sm:w-28"
+                  width="160"
+                  height="160"
+                  preset="avatar"
+                  loading="lazy"
+                  decoding="async"
+                />
                 <p class="mt-3 font-display text-base text-[#2b2a28]">{{ groom.name }}</p>
               </div>
               <div class="text-center">
-                <img v-if="bride.image" :src="bride.image" :alt="bride.name" class="profile-photo mx-auto h-24 w-24 sm:h-28 sm:w-28" loading="lazy" decoding="async" />
+                <NuxtImg
+                  v-if="bride.image"
+                  :src="bride.image"
+                  :alt="bride.name"
+                  class="profile-photo mx-auto h-24 w-24 sm:h-28 sm:w-28"
+                  width="160"
+                  height="160"
+                  preset="avatar"
+                  loading="lazy"
+                  decoding="async"
+                />
                 <p class="mt-3 font-display text-base text-[#2b2a28]">{{ bride.name }}</p>
               </div>
             </div>

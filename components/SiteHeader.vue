@@ -5,10 +5,14 @@
   >
     <div class="relative mx-auto flex max-w-screen-lg items-center justify-end px-[var(--header-pad-x)] py-[var(--header-pad-y)]">
       <NuxtLink to="/" class="absolute left-1/2 flex -translate-x-1/2 items-center gap-[var(--header-gap)]">
-        <img
+        <NuxtImg
           src="/shared/favicon.png"
           alt="logo"
           class="h-[var(--header-logo-size)] w-[var(--header-logo-size)]"
+          width="48"
+          height="48"
+          preset="icon"
+          decoding="async"
         />
         <span class="font-display text-[var(--header-text-size)] leading-none tracking-wide text-white text-shadow-soft uppercase whitespace-nowrap">Wedding Day</span>
       </NuxtLink>

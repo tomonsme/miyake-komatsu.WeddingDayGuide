@@ -44,7 +44,6 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#BDA06A' }
       ],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/shared/favicon.png' },
         { rel: 'icon', type: 'image/x-icon', href: '/shared/favicon.ico' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
@@ -78,6 +77,18 @@ export default defineNuxtConfig({
       hero: {
         // Revert to JPG to ensure compatibility with local static images
         modifiers: { fit: 'cover', format: 'jpg', quality: 80 }
+      },
+      story: {
+        modifiers: { fit: 'cover', format: 'jpg', quality: 70 }
+      },
+      album: {
+        modifiers: { fit: 'cover', format: 'jpg', quality: 75 }
+      },
+      avatar: {
+        modifiers: { fit: 'cover', format: 'jpg', quality: 80 }
+      },
+      icon: {
+        modifiers: { fit: 'cover', format: 'png', quality: 80 }
       },
       gallery: {
         modifiers: { fit: 'cover', format: 'webp', quality: 70 }
