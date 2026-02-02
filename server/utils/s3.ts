@@ -19,7 +19,7 @@ export const getS3Config = (): S3Config => {
   const env = process.env
   const region = String(config.s3Region || env.S3_REGION || env.AWS_REGION || '').trim()
   const bucket = String(config.s3Bucket || env.S3_BUCKET || '').trim()
-  const prefix = String(config.s3Prefix || env.S3_PREFIX || 'uploads').trim()
+  const prefix = String(config.s3Prefix || env.S3_PREFIX || '').trim()
   const publicBaseUrl = String(config.s3PublicBaseUrl || env.S3_PUBLIC_BASE_URL || '').trim()
   const s3AccessKeyId = String(config.s3AccessKeyId || env.S3_ACCESS_KEY_ID || '').trim()
   const s3SecretAccessKey = String(config.s3SecretAccessKey || env.S3_SECRET_ACCESS_KEY || '').trim()

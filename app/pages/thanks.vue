@@ -11,7 +11,7 @@
       </div>
 
       <p class="text-sm leading-relaxed text-white/70">
-        引っ越してから今日までのベストバイを勝手に紹介します。
+        引っ越してから今日までのベストバイを勝手に紹介します 
       </p>
 
       <div class="mt-6 grid gap-5">
@@ -66,9 +66,9 @@ const rankingItems = [
     rank: 3,
     title: 'カービィプロコン',
     catch: 'ともやからのクリスマスプレゼント！',
-    story: '楽しみにしてたぷよテト、全然勝てなくて拗ねそう',
+    story: '楽しみにしてたぷよテト 全然勝てなくて拗ねそう',
     points: [],
-    image: 'https://m.media-amazon.com/images/I/61Ym-rONGbL._AC_SL1500_.jpg',
+    image: '/pages/thanks/3note.jpg',
     imageAlt: 'カービィプロコン',
     linkUrl: 'https://www.amazon.co.jp/%E3%80%90%E4%BB%BB%E5%A4%A9%E5%A0%82%E3%83%A9%E3%82%A4%E3%82%BB%E3%83%B3%E3%82%B9%E5%95%86%E5%93%81%E3%80%91PowerA-%E3%83%AF%E3%82%A4%E3%83%A4%E3%83%AC%E3%82%B9%E3%82%B3%E3%83%B3%E3%83%88%E3%83%AD%E3%83%BC%E3%83%A9%E3%83%BC-Nintendo-Switch-2%E5%B9%B4%E4%BF%9D%E8%A8%BC%E3%80%91NSGP0348JP-01/dp/B0DHCCN7YQ/ref=asc_df_B0DHCCN7YQ?mcid=faadce7ae017341eb459a525bf3037a5&th=1&tag=jpgo-22&linkCode=df0&hvadid=707565314537&hvpos=&hvnetw=g&hvrand=4265257877264297499&hvpone=&hvptwo=&hvqmt=&hvdev=c&hvdvcmdl=&hvlocint=&hvlocphy=1009561&hvtargid=pla-2366208117571&hvocijid=4265257877264297499-B0DHCCN7YQ-&hvexpln=0',
     linkLabel: 'リンクを見る'
@@ -76,7 +76,7 @@ const rankingItems = [
   {
     rank: 2,
     title: 'ポップインアラジン',
-    catch: 'テレビ廃止して寝室に導入。',
+    catch: 'テレビ廃止して寝室に導入 ',
     story: '休日ベッドでビール飲みながらサッカー見れるの最高！',
     points: [],
     image: 'https://www.aladdinx.jp/cdn/shop/files/OGP_3e75dbdc-eba4-48e7-9ea3-33309dc1c1c0.jpg?v=1670815010',
@@ -87,8 +87,8 @@ const rankingItems = [
   {
     rank: 1,
     title: '炎舞炊き',
-    catch: '三宅家のお米を炊けば至高のうまさ。',
-    story: '甘みがすんごい。QOL爆上がりです！！',
+    catch: '三宅家のお米を炊けば至高のうまさ ',
+    story: '甘みがすんごい QOL爆上がりです！！',
     points: [],
     image: '/pages/thanks/202088.jpg',
     imageAlt: '炎舞炊き',

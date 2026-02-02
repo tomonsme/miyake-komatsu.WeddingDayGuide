@@ -138,15 +138,12 @@ export const eventConfig: EventConfig = {
   notes: [
     {
       title: '写真撮影',
-      body: '披露宴中の撮影は大歓迎です\n写真や動画 たくさん撮って送ってください〜☺ 非日常空間なのでどこで撮ってもいい感じになると思います 全員とツーショット撮るのが目標です!'
+      body: '披露宴中の撮影は大歓迎です\n写真や動画 たくさん撮って送ってください〜☺ 非日常空間なのでどこで撮ってもいい感じになると思います 全員とツーショット撮るのが目標です! 高砂来て笑'
     },
     {
       title: '二次会',
-      body: '全体での二次会はございません お披楽喜後にお茶したり飲みに行かれる方はぜひ場所をご連絡ください!\n顔出します!\nどこに行けば…という場合はGlico同期に聞いてみてください きっと何か教えてくれるはず(優しい人達なので遠慮せず)'
+      body: '全体での二次会はございません お披楽喜後にお茶したり飲みに行かれる方はぜひ場所をご連絡ください! 顔出します!\nどこに行けば…という場合はGlico同期に聞いてみてください きっと何か教えてくれるはず(優しい人達なので遠慮せず)'
     },
-    { title: 'お食事', body: 'いっぱい食べていっぱい飲んでください 迷ったら好きなものからどうぞ' },
-    { title: 'お席', body: '席次表でお席をご確認ください 迷ったらスタッフに声かけてね' },
-    { title: '喫煙', body: '喫煙は決まった場所でお願いします 会場内は禁煙です' },
     { title: 'その他', body: 'その他 何か気になることがあれば スタッフの方にお声がけください' }
   ],
   photoShare: {
@@ -154,8 +151,8 @@ export const eventConfig: EventConfig = {
     subtitle: '撮影した写真をお送りいただけると嬉しいです'
   },
   profile: {
-    groom: { name: '三宅 智也', image: '/pages/profile/groom.JPG' },
-    bride: { name: '小松 美穂乃', image: '/pages/profile/bride.JPG' },
+    groom: { name: '三宅 智也', image: '/pages/profile/groom.jpg' },
+    bride: { name: '小松 美穂乃', image: '/pages/profile/bride.jpg' },
     rows: [
       { label: '生年月日', left: '1997.9.3', right: '1995.5.12' },
       { label: '血液型', left: 'A型', right: 'AB型' },
@@ -192,7 +189,7 @@ export const eventConfig: EventConfig = {
   },
   storyboard: [
     { id: 'message', label: 'Message', title: 'メッセージ', subtitle: 'ご挨拶', image: '/pages/storyboard/message.jpg', to: '/message' },
-    { id: 'seating', label: 'Seating', title: '席次表', subtitle: '席次表の確認', image: '/pages/storyboard/seating.jpg', to: '/seating' },
+    { id: 'seating', label: 'Seating', title: '席次表', subtitle: '席次表の確認', image: '/pages/seating/ring.jpg', to: '/seating' },
     { id: 'notes', label: 'Notes', title: 'お願い', subtitle: '当日のご注意', image: '/pages/storyboard/notes.jpg', to: '/notes' },
     { id: 'profile', label: 'Profile', title: 'プロフィール', subtitle: '新郎新婦のご紹介', image: '/pages/storyboard/profile.jpg', to: '/profile' },
     { id: 'photos', label: 'Photos', title: '写真共有', subtitle: '撮影した写真を送る', image: '/pages/storyboard/photos.jpg', to: '/photos' },

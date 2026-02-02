@@ -22,6 +22,7 @@
               :key="item.id"
               type="button"
               class="group story-card relative w-full aspect-[1/1] sm:aspect-auto sm:w-[200px] sm:h-[250px] md:w-[230px] md:h-[288px] lg:w-[240px] lg:h-[300px] border border-gold/30 bg-white/5 text-left shadow-[0_18px_36px_-26px_rgba(0,0,0,.55)] transition duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              :class="{ 'story-card--seating': item.id === 'seating' }"
               @click="jumpTo(item.to)"
               :aria-label="item.title"
             >

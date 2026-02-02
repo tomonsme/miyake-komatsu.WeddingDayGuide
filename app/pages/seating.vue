@@ -10,26 +10,24 @@
         <NuxtLink to="/" class="btn-secondary btn-sm justify-center">ホームへ戻る</NuxtLink>
       </div>
 
-      <div ref="seatingShellRef" class="seating-shell" :class="{ 'seating-shell--fullscreen': isFullscreen }">
+      <div ref="seatingShellRef" class="seating-shell">
         <div class="seating-controls sm:hidden">
-          <div v-if="!isFullscreen" class="seating-hints">
+          <div v-if="!isPdfOpen" class="seating-hints">
             <span class="seating-pill">横向き推奨</span>
             <span class="seating-pill">横にスクロール</span>
           </div>
           <button
             type="button"
             class="seating-fullscreen-btn"
-            :disabled="isToggling"
-            :aria-busy="isToggling"
-            @click="toggleFullscreen"
+            @click="togglePdf"
           >
-            {{ isFullscreen ? '閉じる' : '全画面で見る' }}
+            {{ isPdfOpen ? '閉じる' : '全画面で見る' }}
           </button>
         </div>
         <div
           ref="seatingScrollRef"
           class="seating-scroll"
-          :class="{ 'seating-scroll--fullscreen': isFullscreen }"
+          v-show="!isPdfOpen"
           @pointerdown="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
@@ -44,7 +42,6 @@
           <div class="seating-header">
             <div class="seating-header__left">
               <p class="seating-kicker-row">
-                <span class="seating-kicker">Seating Chart</span>
                 <span class="seating-sub">席次表</span>
               </p>
             </div>
@@ -148,6 +145,13 @@
           </div>
         </div>
         </div>
+        <div v-if="isPdfOpen" class="seating-pdf-overlay">
+          <div class="seating-pdf-actions">
+            <a class="seating-fullscreen-btn" :href="seatingPdfPath" download>PDFを保存</a>
+            <button type="button" class="seating-fullscreen-btn" @click="closePdf">閉じる</button>
+          </div>
+          <iframe class="seating-pdf-frame" :src="seatingPdfUrl" title="席次表 PDF"></iframe>
+        </div>
       </div>
       <p class="mt-3 hidden text-xs text-white/70 sm:block">※ 横にスクロールできます</p>
     </section>
@@ -166,9 +170,9 @@ type SeatingRowItem =
 
 const { displayCouple, seating, profile, displayDateParts, venue, venueRoom } = useEventData()
 const tables = computed(() => seating.value?.tables ?? [])
-const isFullscreen = ref(false)
-const isToggling = ref(false)
-const lockRequestId = ref(0)
+const isPdfOpen = ref(false)
+const seatingPdfPath = '/pages/seating/seating.pdf'
+const seatingPdfUrl = `${seatingPdfPath}#view=Fit`
 const seatingShellRef = ref<HTMLElement | null>(null)
 const seatingScrollRef = ref<HTMLElement | null>(null)
 const seatingSheetRef = ref<HTMLElement | null>(null)
@@ -518,100 +522,27 @@ const handleResize = () => {
   applyTransform(panX.value, panY.value, zoom.value)
 }
 
-async function lockOrientation(requestId: number) {
-  if (!process.client) return
-  const orientation = typeof screen !== 'undefined' ? screen.orientation : undefined
-  if (!orientation?.lock) return
-  try {
-    await orientation.lock('landscape')
-  } catch {
-    // Ignore unsupported or blocked orientation locks.
-  }
-  if (requestId !== lockRequestId.value || !isFullscreen.value) {
-    unlockOrientation()
-  }
+function togglePdf() {
+  isPdfOpen.value = !isPdfOpen.value
 }
 
-function unlockOrientation() {
-  if (!process.client) return
-  const orientation = typeof screen !== 'undefined' ? screen.orientation : undefined
-  if (!orientation?.unlock) return
-  try {
-    orientation.unlock()
-  } catch {
-    // Ignore unlock errors.
-  }
-}
-
-async function requestFullscreen(target: HTMLElement | null) {
-  if (!process.client || !target) return
-  const request =
-    target.requestFullscreen ||
-    (target as any).webkitRequestFullscreen ||
-    (target as any).msRequestFullscreen
-  if (!request) return
-  try {
-    await request.call(target)
-  } catch {
-    // Ignore fullscreen errors; we still use the overlay fallback.
-  }
-}
-
-async function exitFullscreen() {
-  if (!process.client) return
-  const doc = document as any
-  const exit = document.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen
-  if (!exit) return
-  try {
-    await exit.call(document)
-  } catch {
-    // Ignore exit errors.
-  }
-}
-
-async function toggleFullscreen() {
-  if (isToggling.value) return
-  isToggling.value = true
-  const next = !isFullscreen.value
-  isFullscreen.value = next
-  lockRequestId.value += 1
-  const requestId = lockRequestId.value
-  if (next) {
-    await requestFullscreen(seatingShellRef.value)
-    await lockOrientation(requestId)
-  } else {
-    unlockOrientation()
-    await exitFullscreen()
-  }
-  isToggling.value = false
+function closePdf() {
+  isPdfOpen.value = false
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && isFullscreen.value) {
-    isFullscreen.value = false
+  if (event.key === 'Escape' && isPdfOpen.value) {
+    isPdfOpen.value = false
   }
 }
 
-const handleFullscreenChange = () => {
-  if (!process.client) return
-  const doc = document as any
-  const active = Boolean(document.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement)
-  if (!active && isFullscreen.value) {
-    isFullscreen.value = false
-    unlockOrientation()
-  }
-}
-
-watch(isFullscreen, (value) => {
+watch(isPdfOpen, (value) => {
   if (!process.client) return
   document.body.style.overflow = value ? 'hidden' : ''
-  requestAnimationFrame(() => applyTransform(panX.value, panY.value, zoom.value))
 })
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
-  document.addEventListener('fullscreenchange', handleFullscreenChange)
-  document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
   window.addEventListener('resize', handleResize)
   seatingScrollRef.value?.addEventListener('gesturestart', preventGesture, { passive: false } as AddEventListenerOptions)
   seatingScrollRef.value?.addEventListener('gesturechange', preventGesture, { passive: false } as AddEventListenerOptions)
@@ -627,8 +558,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
-  document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
   window.removeEventListener('resize', handleResize)
   seatingScrollRef.value?.removeEventListener('gesturestart', preventGesture as EventListener)
   seatingScrollRef.value?.removeEventListener('gesturechange', preventGesture as EventListener)
@@ -640,7 +569,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('gesturechange', handleDocumentGesture, true)
   document.removeEventListener('gestureend', handleDocumentGesture, true)
   if (process.client) document.body.style.overflow = ''
-  unlockOrientation()
 })
 
 useHead(() => {
