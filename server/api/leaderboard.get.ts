@@ -1,3 +1,7 @@
-import { getLeaderboardSnapshot } from '../utils/leaderboard'
+import { setHeader } from 'h3'
+import { getLeaderboardSnapshotFresh } from '../utils/leaderboard'
 
-export default defineEventHandler(() => getLeaderboardSnapshot())
+export default defineEventHandler(async (event) => {
+  setHeader(event, 'Cache-Control', 'no-store')
+  return await getLeaderboardSnapshotFresh()
+})

@@ -1,7 +1,8 @@
-import { createError, readBody } from 'h3'
+import { createError, readBody, setHeader } from 'h3'
 import { addEntry, type GameId } from '../utils/leaderboard'
 
 export default defineEventHandler(async (event) => {
+  setHeader(event, 'Cache-Control', 'no-store')
   const body = await readBody(event)
   if (!body) {
     throw createError({ statusCode: 400, statusMessage: 'Missing body' })
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const meta = body.meta && typeof body.meta === 'object' ? body.meta : undefined
 
-  return addEntry({
+  return await addEntry({
     game,
     name,
     score,

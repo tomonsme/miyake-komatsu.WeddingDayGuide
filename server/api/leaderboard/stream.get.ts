@@ -1,9 +1,11 @@
-import { getLeaderboardSnapshot, subscribe } from '../../utils/leaderboard'
+import { setHeader } from 'h3'
+import { type LeaderboardSnapshot, getLeaderboardSnapshotFresh, subscribe } from '../../utils/leaderboard'
 
-export default defineEventHandler((event) => {
-  setHeader(event, 'Content-Type', 'text/event-stream')
-  setHeader(event, 'Cache-Control', 'no-cache')
+export default defineEventHandler(async (event) => {
+  setHeader(event, 'Content-Type', 'text/event-stream; charset=utf-8')
+  setHeader(event, 'Cache-Control', 'no-store, no-transform')
   setHeader(event, 'Connection', 'keep-alive')
+  setHeader(event, 'X-Accel-Buffering', 'no')
 
   const res = event.node.res
   const req = event.node.req
@@ -11,12 +13,13 @@ export default defineEventHandler((event) => {
   res.flushHeaders?.()
 
   let closed = false
-  const send = (payload: ReturnType<typeof getLeaderboardSnapshot>) => {
+  const send = (payload: LeaderboardSnapshot) => {
     if (closed) return
     res.write(`data: ${JSON.stringify(payload)}\n\n`)
   }
 
-  send(getLeaderboardSnapshot())
+  const initialSnapshot = await getLeaderboardSnapshotFresh()
+  send(initialSnapshot)
 
   const unsubscribe = subscribe((snapshot) => {
     send(snapshot)

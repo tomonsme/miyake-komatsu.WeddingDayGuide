@@ -25,13 +25,19 @@
               @click="jumpTo(item.to)"
               :aria-label="item.title"
             >
+              <span
+                v-if="item.image"
+                class="story-card__media-bg"
+                :style="{ backgroundImage: `url('${item.image}')` }"
+                aria-hidden="true"
+              ></span>
               <NuxtImg
                 v-if="item.image"
                 :src="item.image"
                 alt=""
-                class="story-card__media absolute inset-0 h-full w-full object-cover"
-                width="240"
-                height="300"
+                class="story-card__media absolute inset-0 h-full w-full object-contain"
+                width="600"
+                sizes="(max-width: 640px) 32vw, (max-width: 1024px) 200px, 240px"
                 preset="story"
                 loading="lazy"
                 decoding="async"

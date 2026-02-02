@@ -18,7 +18,7 @@
   --header-text-size: clamp(11px, 3.2vw, 14px);
   --header-gap: clamp(6px, 1.8vw, 10px);
   --header-pad-x: clamp(12px, 4vw, 20px);
-  --header-pad-y: clamp(10px, 3vw, 16px);
+  --header-pad-y: clamp(18px, 5vw, 32px);
 }
 
 @layer base {
@@ -261,10 +261,22 @@
     }
   }
   .story-card__media,
+  .story-card__media-bg,
   .story-card__overlay,
   .story-card__bg {
     border-radius: inherit;
   }
+  .story-card__media-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: blur(14px) saturate(120%);
+    transform: scale(1.08);
+    opacity: 0.7;
+  }
+  .story-card__media { z-index: 1; }
+  .story-card__overlay { z-index: 2; }
   .story-card__overlay {
     position: absolute;
     inset: 0;

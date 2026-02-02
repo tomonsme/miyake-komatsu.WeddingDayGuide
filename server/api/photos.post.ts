@@ -1,6 +1,6 @@
 import { createError, readMultipartFormData } from 'h3'
 import { extname } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getS3Client, getS3Config, normalizePrefix } from '../utils/s3'
 
@@ -52,6 +52,22 @@ const ensureExtension = (filename: string, mimeType: string) => {
   return ''
 }
 
+const sanitizeBaseName = (filename: string) => {
+  const base = filename.replace(/\.[^/.]+$/, '')
+  const cleaned = base
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return cleaned.slice(0, 40)
+}
+
+const buildFileName = (filename: string, ext: string, index: number) => {
+  const base = sanitizeBaseName(filename)
+  const unique = `${Date.now()}-${randomBytes(12).toString('hex')}-${index + 1}`
+  return base ? `${base}-${unique}${ext}` : `${unique}${ext}`
+}
+
 export default defineEventHandler(async (event) => {
   try {
     const form = await readMultipartFormData(event)
@@ -78,7 +94,7 @@ export default defineEventHandler(async (event) => {
     const normalizedPrefix = normalizePrefix(prefix)
     const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
 
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const mimeType = file.type || ''
       const rawExt = extname(file.filename || '').toLowerCase()
       const isAllowed = ALLOWED_TYPES.has(mimeType) || ALLOWED_EXTS.has(rawExt)
@@ -90,7 +106,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: `File too large (max ${MAX_FILE_MB}MB)` })
       }
       const ext = ensureExtension(file.filename || '', mimeType)
-      const fileName = `${Date.now()}-${randomUUID()}${ext}`
+      const fileName = buildFileName(file.filename || '', ext, index)
       const objectKey = `${folderKey}/${fileName}`
       try {
         await s3.send(new PutObjectCommand({

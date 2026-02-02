@@ -95,9 +95,9 @@
         <div class="luxe-card__inner dq-panel__inner" aria-live="polite">
           <div class="flex items-center justify-between">
             <p class="dq-label">ランキング</p>
-            <span class="live-badge" :class="liveConnected ? '' : 'text-white/50 border-white/20'">
-              <span class="live-dot" :class="liveConnected ? 'is-on' : 'is-off'"></span>
-              {{ liveConnected ? 'LIVE' : 'OFFLINE' }}
+            <span class="live-badge" :class="liveIndicator ? '' : 'text-white/50 border-white/20'">
+              <span class="live-dot" :class="liveIndicator ? 'is-on' : 'is-off'"></span>
+              {{ liveIndicator ? 'LIVE' : 'OFFLINE' }}
             </span>
           </div>
           <p class="mt-1 text-sm text-white/85">会場内でリアルタイム更新</p>
@@ -310,6 +310,7 @@ type GameId = 'tap10' | 'stop11'
 
 type LeaderboardEntry = {
   id: string
+  game: GameId
   name: string
   score: number
   meta?: { timeMs?: number; deltaMs?: number }
@@ -368,6 +369,23 @@ const leaderboard = ref<LeaderboardSnapshot>({ tap10: [], stop11: [] })
 const liveConnected = ref(false)
 const leaderboardError = ref('')
 const leaderboardUpdatedAt = ref<number | null>(null)
+const nowTick = ref(Date.now())
+
+const MAX_LEADERBOARD_ENTRIES = 3
+const POLL_FAST_MS = 5000
+const POLL_SLOW_MS = 15000
+const STREAM_STALE_MS = 30000
+const RECONNECT_MAX_DELAY_MS = 20000
+
+const sortTapEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
+  if (b.score !== a.score) return b.score - a.score
+  return a.createdAt - b.createdAt
+}
+
+const sortStopEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
+  if (a.score !== b.score) return a.score - b.score
+  return a.createdAt - b.createdAt
+}
 
 const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | null => {
   if (!payload || typeof payload !== 'object') return null
@@ -381,11 +399,34 @@ const applyLeaderboardSnapshot = (payload: unknown) => {
   if (!normalized) return false
   leaderboard.value = normalized
   leaderboardUpdatedAt.value = Date.now()
+  leaderboardError.value = ''
+  liveConnected.value = true
   return true
 }
 
+const mergeLeaderboardEntry = (entry: LeaderboardEntry) => {
+  if (!entry || (entry.game !== 'tap10' && entry.game !== 'stop11')) return false
+  const key: GameId = entry.game
+  const current = leaderboard.value[key].filter((item) => item.id !== entry.id)
+  current.push(entry)
+  current.sort(key === 'tap10' ? sortTapEntries : sortStopEntries)
+  const next = current.slice(0, MAX_LEADERBOARD_ENTRIES)
+  leaderboard.value = { ...leaderboard.value, [key]: next }
+  leaderboardUpdatedAt.value = Date.now()
+  leaderboardError.value = ''
+  liveConnected.value = true
+  return true
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 const formatSeconds = (ms: number) => (ms / 1000).toFixed(2)
 const formatDelta = (ms: number) => `${formatSeconds(ms)}s`
+const liveIndicator = computed(() => {
+  if (liveConnected.value) return true
+  if (!leaderboardUpdatedAt.value) return false
+  return nowTick.value - leaderboardUpdatedAt.value < STREAM_STALE_MS
+})
 const lastUpdatedLabel = computed(() => {
   if (!leaderboardUpdatedAt.value) return ''
   return new Date(leaderboardUpdatedAt.value).toLocaleTimeString('ja-JP', {
@@ -394,43 +435,118 @@ const lastUpdatedLabel = computed(() => {
   })
 })
 
+let refreshInFlight = false
+
 const refreshLeaderboard = async () => {
-  leaderboardError.value = ''
-  try {
-    const data = await $fetch<LeaderboardSnapshot>('/api/leaderboard')
-    if (!applyLeaderboardSnapshot(data)) {
-      leaderboardError.value = 'ランキングを取得できませんでした'
-    }
-  } catch (err) {
-    leaderboardError.value = 'ランキングを取得できませんでした'
+  if (refreshInFlight) return false
+  refreshInFlight = true
+  if (!leaderboardUpdatedAt.value) {
+    leaderboardError.value = '取得中です...'
+  } else {
+    leaderboardError.value = ''
   }
+  try {
+    const data = await $fetch<LeaderboardSnapshot>('/api/leaderboard', { cache: 'no-store' })
+    if (!applyLeaderboardSnapshot(data)) {
+      if (!leaderboardUpdatedAt.value) {
+        leaderboardError.value = '取得中です...'
+      }
+      return false
+    }
+    liveConnected.value = true
+    return true
+  } catch (err) {
+    if (!leaderboardUpdatedAt.value) {
+      leaderboardError.value = '取得中です...'
+    }
+    return false
+  } finally {
+    refreshInFlight = false
+  }
+}
+
+const refreshLeaderboardWithRetry = async (attempts = 3) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const ok = await refreshLeaderboard()
+    if (ok) return true
+    await wait(400 * (attempt + 1))
+  }
+  return false
 }
 
 let eventSource: EventSource | null = null
 let leaderboardPoller: ReturnType<typeof setInterval> | null = null
+let pollIntervalMs = 0
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let reconnectAttempts = 0
+let lastStreamMessageAt = 0
+let visibilityHandler: (() => void) | null = null
+let onlineHandler: (() => void) | null = null
+let offlineHandler: (() => void) | null = null
 
 const stopLeaderboardPolling = () => {
   if (!leaderboardPoller) return
   clearInterval(leaderboardPoller)
   leaderboardPoller = null
+  pollIntervalMs = 0
 }
 
-const startLeaderboardPolling = () => {
-  if (leaderboardPoller) return
+const startLeaderboardPolling = (intervalMs: number) => {
+  if (leaderboardPoller && pollIntervalMs === intervalMs) return
+  stopLeaderboardPolling()
+  pollIntervalMs = intervalMs
   leaderboardPoller = setInterval(() => {
-    refreshLeaderboard()
-  }, 10000)
+    nowTick.value = Date.now()
+    void refreshLeaderboard()
+    if (eventSource && Date.now() - lastStreamMessageAt > STREAM_STALE_MS) {
+      reconnectLeaderboardStream()
+    }
+  }, intervalMs)
+  void refreshLeaderboard()
 }
 
-const connectLeaderboardStream = () => {
+const scheduleStreamReconnect = () => {
+  if (reconnectTimer) return
+  const delay = Math.min(1000 * 2 ** reconnectAttempts, RECONNECT_MAX_DELAY_MS)
+  reconnectAttempts = Math.min(reconnectAttempts + 1, 6)
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    connectLeaderboardStream({ force: true })
+  }, delay)
+}
+
+const reconnectLeaderboardStream = () => {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
+  liveConnected.value = false
+  scheduleStreamReconnect()
+}
+
+const connectLeaderboardStream = (options?: { force?: boolean }) => {
   if (typeof window === 'undefined') return
-  if (eventSource) eventSource.close()
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  if (eventSource && !options?.force) return
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
   eventSource = new EventSource('/api/leaderboard/stream')
   eventSource.onopen = () => {
     liveConnected.value = true
-    stopLeaderboardPolling()
+    reconnectAttempts = 0
+    lastStreamMessageAt = Date.now()
+    nowTick.value = Date.now()
+    startLeaderboardPolling(POLL_SLOW_MS)
   }
   eventSource.onmessage = (event) => {
+    lastStreamMessageAt = Date.now()
+    liveConnected.value = true
+    nowTick.value = Date.now()
     try {
       const data = JSON.parse(event.data) as LeaderboardSnapshot
       applyLeaderboardSnapshot(data)
@@ -439,12 +555,8 @@ const connectLeaderboardStream = () => {
     }
   }
   eventSource.onerror = () => {
-    liveConnected.value = false
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-    }
-    startLeaderboardPolling()
+    startLeaderboardPolling(POLL_FAST_MS)
+    reconnectLeaderboardStream()
   }
 }
 
@@ -616,7 +728,7 @@ const submitScore = async (game: GameId, score: number, meta?: { timeMs?: number
   if (!stateRef) return
   stateRef.value = 'saving'
   try {
-    await $fetch('/api/leaderboard', {
+    const entry = await $fetch<LeaderboardEntry>('/api/leaderboard', {
       method: 'POST',
       body: {
         game,
@@ -625,8 +737,11 @@ const submitScore = async (game: GameId, score: number, meta?: { timeMs?: number
         meta
       }
     })
+    if (entry) {
+      mergeLeaderboardEntry(entry)
+    }
     stateRef.value = 'done'
-    refreshLeaderboard()
+    void refreshLeaderboardWithRetry()
     setTimeout(() => {
       stateRef.value = 'idle'
     }, 1600)
@@ -666,16 +781,42 @@ onMounted(() => {
     if (savedStopBest && !Number.isNaN(Number(savedStopBest))) {
       stopBestDelta.value = Number(savedStopBest)
     }
+    visibilityHandler = () => {
+      if (document.visibilityState !== 'visible') return
+      void refreshLeaderboard()
+      connectLeaderboardStream({ force: true })
+    }
+    onlineHandler = () => {
+      void refreshLeaderboard()
+      connectLeaderboardStream({ force: true })
+    }
+    offlineHandler = () => {
+      liveConnected.value = false
+      startLeaderboardPolling(POLL_FAST_MS)
+    }
+    document.addEventListener('visibilitychange', visibilityHandler)
+    window.addEventListener('online', onlineHandler)
+    window.addEventListener('offline', offlineHandler)
   }
-  refreshLeaderboard()
+  void refreshLeaderboard()
+  startLeaderboardPolling(POLL_FAST_MS)
   connectLeaderboardStream()
 })
 
 onBeforeUnmount(() => {
   if (tapTicker) clearInterval(tapTicker)
   if (stopTicker) clearInterval(stopTicker)
-  if (eventSource) eventSource.close()
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
   stopLeaderboardPolling()
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  if (typeof window !== 'undefined') {
+    if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler)
+    if (onlineHandler) window.removeEventListener('online', onlineHandler)
+    if (offlineHandler) window.removeEventListener('offline', offlineHandler)
+  }
 })
 
 useHead(() => {
