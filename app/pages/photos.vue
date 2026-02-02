@@ -251,6 +251,8 @@ const uploadError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
 type GalleryItem = { key: string; url: string; lastModified: string }
+type PresignUpload = { key: string; url: string; headers?: Record<string, string> }
+type PresignResponse = { uploads: PresignUpload[] }
 const galleryItems = ref<GalleryItem[]>([])
 const galleryState = ref<'idle' | 'loading' | 'error'>('idle')
 const galleryError = ref('')
@@ -398,11 +400,38 @@ const uploadFiles = async () => {
   uploadState.value = 'uploading'
   uploadError.value = ''
   try {
-    const body = new FormData()
-    selectedItems.value.forEach((item) => body.append('files', item.file))
-    if (senderName.value.trim()) body.append('name', senderName.value.trim())
+    const payload = {
+      files: selectedItems.value.map((item) => ({
+        name: item.file.name,
+        type: item.file.type,
+        size: item.file.size
+      })),
+      name: senderName.value.trim()
+    }
+    const presign = await $fetch<PresignResponse>('/api/photos/presign', {
+      method: 'POST',
+      body: payload
+    })
 
-    await $fetch('/api/photos', { method: 'POST', body })
+    if (!presign.uploads?.length) {
+      throw new Error('No presigned uploads returned')
+    }
+
+    for (let i = 0; i < selectedItems.value.length; i += 1) {
+      const item = selectedItems.value[i]
+      const target = presign.uploads[i]
+      if (!item || !target) {
+        throw new Error('Upload mapping mismatch')
+      }
+      const response = await fetch(target.url, {
+        method: 'PUT',
+        headers: target.headers || {},
+        body: item.file
+      })
+      if (!response.ok) {
+        throw new Error(`S3 upload failed (${response.status})`)
+      }
+    }
 
     clearSelected()
     uploadState.value = 'done'
