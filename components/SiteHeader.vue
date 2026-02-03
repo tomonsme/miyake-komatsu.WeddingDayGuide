@@ -14,7 +14,7 @@
           preset="icon"
           decoding="async"
         />
-        <span class="font-display text-[var(--header-text-size)] leading-none tracking-wide text-white text-shadow-soft uppercase whitespace-nowrap">Wedding Day</span>
+        <span class="font-display text-[length:var(--header-text-size)] leading-none tracking-wide text-white text-shadow-soft uppercase whitespace-nowrap">Wedding Day</span>
       </NuxtLink>
     </div>
   </header>

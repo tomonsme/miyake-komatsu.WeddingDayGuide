@@ -11,15 +11,13 @@ type UploadPart = {
   data?: Buffer | string
 }
 
-const MAX_FILES = 20
+const MAX_FILES = 10
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/heic',
   'image/heif',
-  'image/webp',
-  'video/mp4',
-  'video/quicktime'
+  'image/webp'
 ])
 const ALLOWED_EXTS = new Set([
   '.jpg',
@@ -27,9 +25,7 @@ const ALLOWED_EXTS = new Set([
   '.png',
   '.heic',
   '.heif',
-  '.webp',
-  '.mp4',
-  '.mov'
+  '.webp'
 ])
 
 const toErrorPayload = (err: unknown) => {
@@ -45,8 +41,6 @@ const ensureExtension = (filename: string, mimeType: string) => {
   if (mimeType === 'image/webp') return '.webp'
   if (mimeType === 'image/heic') return '.heic'
   if (mimeType === 'image/heif') return '.heif'
-  if (mimeType === 'video/mp4') return '.mp4'
-  if (mimeType === 'video/quicktime') return '.mov'
   return ''
 }
 
@@ -55,6 +49,16 @@ const sanitizeBaseName = (filename: string) => {
   const cleaned = base
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return cleaned.slice(0, 40)
+}
+
+const sanitizeSenderSegment = (name: string) => {
+  const cleaned = name
+    .trim()
+    .replace(/[\/\\]+/g, '-')
+    .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
   return cleaned.slice(0, 40)
@@ -90,7 +94,9 @@ export default defineEventHandler(async (event) => {
     const s3 = getS3Client(config)
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const normalizedPrefix = normalizePrefix(prefix)
-    const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
+    const senderSegment = senderName ? sanitizeSenderSegment(senderName) : ''
+    const baseFolder = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
+    const folderKey = senderSegment ? `${baseFolder}/${senderSegment}` : baseFolder
 
     for (const [index, file] of files.entries()) {
       const mimeType = file.type || ''

@@ -19,15 +19,13 @@ type PresignResponse = {
   }>
 }
 
-const MAX_FILES = 20
+const MAX_FILES = 10
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/heic',
   'image/heif',
-  'image/webp',
-  'video/mp4',
-  'video/quicktime'
+  'image/webp'
 ])
 const ALLOWED_EXTS = new Set([
   '.jpg',
@@ -35,9 +33,7 @@ const ALLOWED_EXTS = new Set([
   '.png',
   '.heic',
   '.heif',
-  '.webp',
-  '.mp4',
-  '.mov'
+  '.webp'
 ])
 
 const ensureExtension = (filename: string, mimeType: string) => {
@@ -48,8 +44,6 @@ const ensureExtension = (filename: string, mimeType: string) => {
   if (mimeType === 'image/webp') return '.webp'
   if (mimeType === 'image/heic') return '.heic'
   if (mimeType === 'image/heif') return '.heif'
-  if (mimeType === 'video/mp4') return '.mp4'
-  if (mimeType === 'video/quicktime') return '.mov'
   return ''
 }
 
@@ -58,6 +52,16 @@ const sanitizeBaseName = (filename: string) => {
   const cleaned = base
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return cleaned.slice(0, 40)
+}
+
+const sanitizeSenderSegment = (name: string) => {
+  const cleaned = name
+    .trim()
+    .replace(/[\/\\]+/g, '-')
+    .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
   return cleaned.slice(0, 40)
@@ -72,6 +76,7 @@ const buildFileName = (filename: string, ext: string, index: number) => {
 export default defineEventHandler(async (event): Promise<PresignResponse> => {
   const body = await readBody(event)
   const files = Array.isArray(body?.files) ? body.files as PresignFile[] : []
+  const senderName = typeof body?.name === 'string' ? body.name.trim().slice(0, 50) : ''
   if (!files.length) {
     throw createError({ statusCode: 400, statusMessage: 'No files provided' })
   }
@@ -85,7 +90,9 @@ export default defineEventHandler(async (event): Promise<PresignResponse> => {
   const s3 = getS3Client(config)
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const normalizedPrefix = normalizePrefix(prefix)
-  const folderKey = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
+  const senderSegment = senderName ? sanitizeSenderSegment(senderName) : ''
+  const baseFolder = normalizedPrefix ? `${normalizedPrefix}/${today}` : today
+  const folderKey = senderSegment ? `${baseFolder}/${senderSegment}` : baseFolder
 
   const uploads: PresignResponse['uploads'] = []
 
@@ -115,7 +122,7 @@ export default defineEventHandler(async (event): Promise<PresignResponse> => {
       ContentType: mimeType || undefined
     })
 
-    const url = await getSignedUrl(s3, command, { expiresIn: 60 * 5 })
+    const url = await getSignedUrl(s3, command, { expiresIn: 60 * 15 })
 
     const headers: Record<string, string> = {}
     if (mimeType) headers['Content-Type'] = mimeType

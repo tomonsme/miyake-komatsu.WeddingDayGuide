@@ -13,6 +13,7 @@ const baseUrl = process.env.SEATING_PDF_URL || `http://127.0.0.1:${port}`
 const pageUrl = `${baseUrl}/seating`
 const gotoTimeout = Number(process.env.SEATING_PDF_TIMEOUT || 60000)
 const outputPath = resolve(rootDir, 'public', 'seating.pdf')
+const deviceScaleFactor = Number(process.env.SEATING_PDF_DSF || 3)
 
 const startServer = () => {
   const child = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port)], {
@@ -42,7 +43,7 @@ const renderPdf = async () => {
   try {
     const page = await browser.newPage({
       viewport: { width: 1440, height: 900 },
-      deviceScaleFactor: Number(process.env.SEATING_PDF_DSF || 3)
+      deviceScaleFactor
     })
     page.setDefaultTimeout(gotoTimeout)
     await page.emulateMedia({ media: 'screen' })
@@ -183,19 +184,24 @@ const renderPdf = async () => {
     }
     const pdfDoc = await PDFDocument.create()
     const pngImage = await pdfDoc.embedPng(image)
-    const pdfPage = pdfDoc.addPage([pngImage.width, pngImage.height])
+    const safeScaleFactor = Number.isFinite(deviceScaleFactor) && deviceScaleFactor > 0 ? deviceScaleFactor : 1
+    // Convert device pixels into PDF points so viewers open at a reasonable scale.
+    const pointScale = (72 / 96) / safeScaleFactor
+    const pdfWidth = pngImage.width * pointScale
+    const pdfHeight = pngImage.height * pointScale
+    const pdfPage = pdfDoc.addPage([pdfWidth, pdfHeight])
     pdfPage.drawRectangle({
       x: 0,
       y: 0,
-      width: pdfPage.getWidth(),
-      height: pdfPage.getHeight(),
+      width: pdfWidth,
+      height: pdfHeight,
       color: rgb(1, 1, 1)
     })
     pdfPage.drawImage(pngImage, {
       x: 0,
       y: 0,
-      width: pngImage.width,
-      height: pngImage.height
+      width: pdfWidth,
+      height: pdfHeight
     })
     const pdfBytes = await pdfDoc.save()
     await fs.writeFile(outputPath, pdfBytes)

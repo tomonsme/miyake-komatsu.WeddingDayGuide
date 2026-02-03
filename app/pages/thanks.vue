@@ -46,7 +46,7 @@
                   <span v-else>{{ item.title }}</span>
                 </h2>
                 <p class="mt-2 text-sm text-white/85">{{ item.catch }}</p>
-                <p class="mt-3 text-sm leading-relaxed text-white/70">{{ item.story }}</p>
+                <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-white/70">{{ item.story }}</p>
                 <div class="mt-3 grid gap-2 text-xs text-white/70">
                   <p v-for="(point, idx) in item.points" :key="`${item.rank}-pt-${idx}`" class="flex items-start gap-2">
                     <span class="mt-[6px] h-1.5 w-1.5 rounded-full bg-gold/70"></span>
@@ -81,7 +81,7 @@ const rankingItems = [
     rank: 2,
     title: 'ポップインアラジン',
     catch: 'テレビ廃止して寝室に導入 ',
-    story: '休日ベッドでビール飲みながらサッカー見れるの最高！',
+    story: '休日ベッドでビール飲みながらサッカー見れるの最高！\nあんま勝たへんけど(´･_･`)',
     points: [],
     image: 'https://www.aladdinx.jp/cdn/shop/files/OGP_3e75dbdc-eba4-48e7-9ea3-33309dc1c1c0.jpg?v=1670815010',
     imageAlt: 'Aladdin X2 Plus',

@@ -15,6 +15,7 @@ export type MessageInfo = { lines: string[]; date?: string; signature?: string }
 export type PhotoShareInfo = {
   title: string
   subtitle?: string
+  body?: string
   linkUrl?: string
   linkLabel?: string
 }

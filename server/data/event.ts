@@ -13,6 +13,7 @@ export type MessageInfo = { lines: string[]; date?: string; signature?: string }
 export type PhotoShareInfo = {
   title: string
   subtitle?: string
+  body?: string
   linkUrl?: string
   linkLabel?: string
 }
@@ -140,7 +141,7 @@ export const eventConfig: EventConfig = {
   notes: [
     {
       title: '写真撮影',
-      body: '披露宴中の撮影は大歓迎です\n写真や動画 たくさん撮って送ってください〜☺ 非日常空間なのでどこで撮ってもいい感じになると思います 全員とツーショット撮るのが目標です! 高砂来て笑'
+      body: '披露宴中の撮影は大歓迎です\n写真 たくさん撮って送ってください〜☺ 非日常空間なのでどこで撮ってもいい感じになると思います 全員とツーショット撮るのが目標です! 高砂来て笑'
     },
     {
       title: '二次会',
@@ -150,7 +151,8 @@ export const eventConfig: EventConfig = {
   ],
   photoShare: {
     title: '写真共有',
-    subtitle: '撮影した写真をお送りいただけると嬉しいです'
+    subtitle: '撮影した写真をお送りいただけると嬉しいです',
+    body: 'Lineでも送ってくれると思うけど イチオシがあればこちらへ！'
   },
   profile: {
     groom: { name: '三宅 智也', image: '/pages/profile/groom.jpg' },

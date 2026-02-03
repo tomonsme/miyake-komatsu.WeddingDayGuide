@@ -109,6 +109,7 @@
             </span>
           </div>
           <p class="mt-1 text-sm text-white/85">会場内でリアルタイム更新</p>
+          <p class="mt-0.5 text-[10px] text-white/50">※上位3件のみ表示</p>
           <p v-if="lastUpdatedLabel" class="mt-0.5 text-xs text-white/55">更新: {{ lastUpdatedLabel }}</p>
           <p v-if="leaderboardError" class="mt-1 text-xs text-rose-200">{{ leaderboardError }}</p>
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -226,8 +227,12 @@
                   <span v-if="tapBest > 0" class="score-pill">Best {{ tapBest }}</span>
                   <span v-if="tapActive" class="score-pill">Now {{ tapScore }}</span>
                 </div>
-                <p v-if="tapSubmitState === 'done'" class="mt-1 text-xs text-gold">送信しました</p>
-                <p v-else-if="tapSubmitState === 'error'" class="mt-1 text-xs text-rose-200">送信できませんでした</p>
+                <p v-if="tapSubmitState === 'done'" class="mt-1 text-xs text-gold">
+                  {{ tapSubmitNotice || '送信しました' }}
+                </p>
+                <p v-else-if="tapSubmitState === 'error'" class="mt-1 text-xs text-rose-200">
+                  {{ tapSubmitNotice || '送信できませんでした' }}
+                </p>
               </section>
 
               <section
@@ -300,8 +305,12 @@
                   <span v-if="stopBestDelta !== null" class="score-pill">Best Δ {{ formatDelta(stopBestDelta) }}</span>
                   <span v-if="stopResultMs !== null" class="score-pill">今回 {{ formatSeconds(stopResultMs) }}s</span>
                 </div>
-                <p v-if="stopSubmitState === 'done'" class="mt-2 text-xs text-gold">送信しました</p>
-                <p v-else-if="stopSubmitState === 'error'" class="mt-2 text-xs text-rose-200">送信できませんでした</p>
+                <p v-if="stopSubmitState === 'done'" class="mt-2 text-xs text-gold">
+                  {{ stopSubmitNotice || '送信しました' }}
+                </p>
+                <p v-else-if="stopSubmitState === 'error'" class="mt-2 text-xs text-rose-200">
+                  {{ stopSubmitNotice || '送信できませんでした' }}
+                </p>
               </section>
             </div>
           </div>
@@ -328,6 +337,12 @@ type LeaderboardEntry = {
 type LeaderboardSnapshot = {
   tap10: LeaderboardEntry[]
   stop11: LeaderboardEntry[]
+}
+
+type LeaderboardSubmitResponse = {
+  entry: LeaderboardEntry
+  snapshot: LeaderboardSnapshot
+  rank: number | null
 }
 
 const { displayCouple } = useEventData()
@@ -380,8 +395,6 @@ const leaderboardUpdatedAt = ref<number | null>(null)
 const nowTick = ref(Date.now())
 
 const MAX_LEADERBOARD_ENTRIES = 3
-const OPTIMISTIC_ENTRY_TTL_MS = 20000
-const SUBMIT_REVEAL_DELAY_MS = 5000
 const POLL_FAST_MS = 2000
 const POLL_SLOW_MS = 6000
 const STREAM_STALE_MS = 30000
@@ -397,71 +410,16 @@ const sortStopEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
   return a.createdAt - b.createdAt
 }
 
-const optimisticEntries = new Map<string, { entry: LeaderboardEntry; expiresAt: number }>()
-const pendingRevealEntries = new Map<string, number>()
-
-const pruneOptimisticEntries = (now = Date.now()) => {
-  for (const [id, item] of optimisticEntries.entries()) {
-    if (item.expiresAt <= now) {
-      optimisticEntries.delete(id)
-    }
-  }
-}
-
-const prunePendingRevealEntries = (now = Date.now()) => {
-  for (const [id, revealAt] of pendingRevealEntries.entries()) {
-    if (revealAt <= now) {
-      pendingRevealEntries.delete(id)
-    }
-  }
-}
-
-const trackOptimisticEntry = (entry: LeaderboardEntry) => {
-  optimisticEntries.set(entry.id, { entry, expiresAt: Date.now() + OPTIMISTIC_ENTRY_TTL_MS })
-}
-
 const limitEntries = (entries: LeaderboardEntry[], game: GameId) => {
   const list = [...entries]
   list.sort(game === 'tap10' ? sortTapEntries : sortStopEntries)
   return list.slice(0, MAX_LEADERBOARD_ENTRIES)
 }
 
-const reconcileLeaderboardSnapshot = (snapshot: LeaderboardSnapshot) => {
-  const now = Date.now()
-  pruneOptimisticEntries(now)
-  prunePendingRevealEntries(now)
-
-  const idsInSnapshot = new Set<string>()
-  snapshot.tap10.forEach((entry) => idsInSnapshot.add(entry.id))
-  snapshot.stop11.forEach((entry) => idsInSnapshot.add(entry.id))
-  idsInSnapshot.forEach((id) => optimisticEntries.delete(id))
-
-  const filteredEntries = (entries: LeaderboardEntry[]) =>
-    entries.filter((entry) => {
-      const revealAt = pendingRevealEntries.get(entry.id)
-      if (!revealAt) return true
-      if (revealAt <= now) {
-        pendingRevealEntries.delete(entry.id)
-        return true
-      }
-      return false
-    })
-
-  const mergeForGame = (game: GameId, entries: LeaderboardEntry[]) => {
-    const merged = [...filteredEntries(entries)]
-    for (const item of optimisticEntries.values()) {
-      if (item.entry.game !== game) continue
-      if (merged.some((existing) => existing.id === item.entry.id)) continue
-      merged.push(item.entry)
-    }
-    return limitEntries(merged, game)
-  }
-
-  return {
-    tap10: mergeForGame('tap10', snapshot.tap10),
-    stop11: mergeForGame('stop11', snapshot.stop11)
-  }
-}
+const reconcileLeaderboardSnapshot = (snapshot: LeaderboardSnapshot) => ({
+  tap10: limitEntries(snapshot.tap10, 'tap10'),
+  stop11: limitEntries(snapshot.stop11, 'stop11')
+})
 
 const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | null => {
   if (!payload || typeof payload !== 'object') return null
@@ -480,45 +438,12 @@ const applyLeaderboardSnapshot = (payload: unknown) => {
   return true
 }
 
-const mergeLeaderboardEntry = (entry: LeaderboardEntry) => {
-  if (!entry || (entry.game !== 'tap10' && entry.game !== 'stop11')) return false
-  trackOptimisticEntry(entry)
-  const key: GameId = entry.game
-  const current = leaderboard.value[key].filter((item) => item.id !== entry.id)
-  current.push(entry)
-  leaderboard.value = { ...leaderboard.value, [key]: limitEntries(current, key) }
-  leaderboardUpdatedAt.value = Date.now()
-  leaderboardError.value = ''
-  liveConnected.value = true
-  return true
-}
-
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const createEntryId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
   }
   return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-const isEntryVisible = (entry: LeaderboardEntry) =>
-  leaderboard.value[entry.game].some((item) => item.id === entry.id)
-const shouldExpectEntryVisible = (entry: LeaderboardEntry) => {
-  const list = leaderboard.value[entry.game]
-  if (list.length < MAX_LEADERBOARD_ENTRIES) return true
-  const worst = list[list.length - 1]
-  if (!worst) return true
-  if (entry.game === 'tap10') return entry.score > worst.score
-  return entry.score < worst.score
-}
-const ensureEntryVisible = async (entry: LeaderboardEntry) => {
-  if (!shouldExpectEntryVisible(entry)) return
-  if (isEntryVisible(entry)) return
-  const attempts = 3
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    await wait(600 * (attempt + 1))
-    await refreshLeaderboardWithRetry(2)
-    if (isEntryVisible(entry)) return
-  }
 }
 
 const formatSeconds = (ms: number) => (ms / 1000).toFixed(2)
@@ -795,11 +720,13 @@ const stopStart = () => {
 
 const stopStop = () => {
   if (!stopActive.value) return
-  stopElapsedMs.value = performance.now() - stopStartAt
-  stopResultMs.value = stopElapsedMs.value
+  const elapsed = performance.now() - stopStartAt
+  const roundedElapsed = Math.round(elapsed)
+  stopElapsedMs.value = roundedElapsed
+  stopResultMs.value = roundedElapsed
   stopActive.value = false
   stopStopRaf()
-  const delta = Math.abs(stopElapsedMs.value - stopTargetMs)
+  const delta = Math.abs(roundedElapsed - stopTargetMs)
   if (stopBestDelta.value === null || delta < stopBestDelta.value) {
     stopBestDelta.value = Math.round(delta)
     saveStopBest()
@@ -815,6 +742,10 @@ const stopReset = () => {
 
 const tapSubmitState = ref<'idle' | 'saving' | 'done' | 'error'>('idle')
 const stopSubmitState = ref<'idle' | 'saving' | 'done' | 'error'>('idle')
+const tapSubmitNotice = ref('')
+const stopSubmitNotice = ref('')
+const tapSubmitTimer = { value: null as ReturnType<typeof setTimeout> | null }
+const stopSubmitTimer = { value: null as ReturnType<typeof setTimeout> | null }
 const tapSubmitReady = computed(() => tapCanSubmit.value && hasNickname.value && tapSubmitState.value !== 'saving')
 const stopSubmitReady = computed(() => stopCanSubmit.value && hasNickname.value && stopSubmitState.value !== 'saving')
 const tapSubmitLabel = computed(() => {
@@ -828,17 +759,45 @@ const stopSubmitLabel = computed(() => {
   return 'ランキングに送る'
 })
 
-const submitScore = async (game: GameId, score: number, meta?: { timeMs?: number; deltaMs?: number }, stateRef?: typeof tapSubmitState) => {
+const setSubmitState = (
+  stateRef: typeof tapSubmitState,
+  noticeRef: typeof tapSubmitNotice,
+  timerRef: { value: ReturnType<typeof setTimeout> | null },
+  state: 'idle' | 'saving' | 'done' | 'error',
+  message = ''
+) => {
+  if (timerRef.value) {
+    clearTimeout(timerRef.value)
+    timerRef.value = null
+  }
+  stateRef.value = state
+  noticeRef.value = message
+  if (state === 'done' || state === 'error') {
+    timerRef.value = setTimeout(() => {
+      stateRef.value = 'idle'
+      noticeRef.value = ''
+      timerRef.value = null
+    }, 1800)
+  }
+}
+
+const submitScore = async (
+  game: GameId,
+  score: number,
+  meta: { timeMs?: number; deltaMs?: number } | undefined,
+  stateRef: typeof tapSubmitState,
+  noticeRef: typeof tapSubmitNotice,
+  timerRef: { value: ReturnType<typeof setTimeout> | null }
+) => {
   const name = ensureNickname()
   if (!name) return
-  if (!stateRef) return
-  stateRef.value = 'saving'
+  setSubmitState(stateRef, noticeRef, timerRef, 'saving')
   const entryId = createEntryId()
   try {
-    let entry: LeaderboardEntry | null = null
+    let response: LeaderboardSubmitResponse | null = null
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        entry = await $fetch<LeaderboardEntry>('/api/leaderboard', {
+        response = await $fetch<LeaderboardSubmitResponse>('/api/leaderboard', {
           method: 'POST',
           body: {
             id: entryId,
@@ -854,27 +813,26 @@ const submitScore = async (game: GameId, score: number, meta?: { timeMs?: number
         await wait(400 * (attempt + 1))
       }
     }
-    if (entry) {
-      pendingRevealEntries.set(entry.id, Date.now() + SUBMIT_REVEAL_DELAY_MS)
-      setTimeout(() => {
-        pendingRevealEntries.delete(entry.id)
-        mergeLeaderboardEntry(entry)
-        void ensureEntryVisible(entry)
-        void refreshLeaderboardWithRetry()
-      }, SUBMIT_REVEAL_DELAY_MS)
+    if (!response) throw new Error('Missing submit response')
+    if (response.snapshot) {
+      applyLeaderboardSnapshot(response.snapshot)
+    } else {
+      await refreshLeaderboardWithRetry()
     }
-    stateRef.value = 'done'
-    setTimeout(() => {
-      stateRef.value = 'idle'
-    }, 1600)
+    const rank = response.rank
+    const message = rank
+      ? `ランキング${rank}位に入りました`
+      : '送信しました（上位3位に入ると表示されます）'
+    setSubmitState(stateRef, noticeRef, timerRef, 'done', message)
+    void refreshLeaderboardWithRetry()
   } catch (err) {
-    stateRef.value = 'error'
+    setSubmitState(stateRef, noticeRef, timerRef, 'error', '送信できませんでした')
   }
 }
 
 const submitTapScore = () => {
   if (!tapSubmitReady.value) return
-  submitScore('tap10', tapScore.value, undefined, tapSubmitState)
+  submitScore('tap10', tapScore.value, undefined, tapSubmitState, tapSubmitNotice, tapSubmitTimer)
 }
 
 const submitStopScore = () => {
@@ -887,7 +845,9 @@ const submitStopScore = () => {
       timeMs: Math.round(stopResultMs.value),
       deltaMs: Math.round(delta)
     },
-    stopSubmitState
+    stopSubmitState,
+    stopSubmitNotice,
+    stopSubmitTimer
   )
 }
 

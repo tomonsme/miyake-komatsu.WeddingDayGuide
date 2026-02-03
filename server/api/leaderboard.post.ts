@@ -1,5 +1,5 @@
 import { createError, readBody, setHeader } from 'h3'
-import { addEntry, type GameId } from '../utils/leaderboard'
+import { addEntry, getLeaderboardSnapshot, type GameId } from '../utils/leaderboard'
 
 export default defineEventHandler(async (event) => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -26,11 +26,22 @@ export default defineEventHandler(async (event) => {
   const meta = body.meta && typeof body.meta === 'object' ? body.meta : undefined
   const id = typeof body.id === 'string' ? body.id.trim() : undefined
 
-  return await addEntry({
+  const entry = await addEntry({
     id,
     game,
     name,
     score,
     meta
   })
+
+  const snapshot = getLeaderboardSnapshot()
+  const list = snapshot[game] ?? []
+  const rankIndex = list.findIndex((item) => item.id === entry.id)
+  const rank = rankIndex >= 0 ? rankIndex + 1 : null
+
+  return {
+    entry,
+    snapshot,
+    rank
+  }
 })

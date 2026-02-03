@@ -10,10 +10,50 @@
         <NuxtLink to="/" class="btn-secondary btn-sm justify-center home-back-btn">ホームへ戻る</NuxtLink>
       </div>
 
+      <div v-if="hasPdf" class="seating-view-toggle">
+        <div class="seating-view-toggle__group">
+          <button
+            type="button"
+            class="seating-fullscreen-btn"
+            :class="{ 'is-active': viewMode === 'pdf' }"
+            @click="setViewMode('pdf')"
+          >
+            PDFで見る
+          </button>
+          <button
+            type="button"
+            class="seating-fullscreen-btn"
+            :class="{ 'is-active': viewMode === 'chart' }"
+            @click="setViewMode('chart')"
+          >
+            席次表を見る
+          </button>
+        </div>
+        <a
+          v-if="seatingPdfViewUrl"
+          :href="seatingPdfViewUrl"
+          target="_blank"
+          rel="noopener"
+          class="seating-fullscreen-btn seating-view-link"
+        >
+          別タブで開く
+        </a>
+      </div>
+
+      <div v-if="hasPdf" v-show="viewMode === 'pdf'" class="seating-pdf-inline">
+        <iframe
+          class="seating-pdf-frame"
+          :src="seatingPdfViewUrl"
+          title="席次表PDF"
+          loading="lazy"
+        ></iframe>
+      </div>
+
       <div
         ref="seatingShellRef"
         class="seating-shell"
         :class="{ 'seating-shell--fullscreen': isFullscreen }"
+        v-show="!hasPdf || viewMode === 'chart'"
       >
         <div class="seating-controls sm:hidden">
           <div v-if="!isFullscreen" class="seating-hints">
@@ -146,23 +186,8 @@
         </div>
         </div>
       </div>
-      <p class="mt-3 hidden text-xs text-white/70 sm:block">※ 横にスクロールできます</p>
+      <p v-show="!hasPdf || viewMode === 'chart'" class="mt-3 hidden text-xs text-white/70 sm:block">※ 横にスクロールできます</p>
     </section>
-    <div v-if="isPdfOpen" class="seating-pdf-overlay" role="dialog" aria-modal="true">
-      <div class="seating-pdf-actions">
-        <a
-          v-if="seatingPdfViewUrl"
-          :href="seatingPdfViewUrl"
-          target="_blank"
-          rel="noopener"
-          class="seating-fullscreen-btn"
-        >
-          別タブで開く
-        </a>
-        <button type="button" class="seating-fullscreen-btn" @click="isPdfOpen = false">閉じる</button>
-      </div>
-      <iframe class="seating-pdf-frame" :src="seatingPdfViewUrl" title="席次表PDF"></iframe>
-    </div>
   </main>
 </template>
 
@@ -179,9 +204,10 @@ type SeatingRowItem =
 const { displayCouple, seating, seatingPdfUrl, profile, displayDateParts, venue, venueRoom } = useEventData()
 const tables = computed(() => seating.value?.tables ?? [])
 const isFullscreen = ref(false)
-const isPdfOpen = ref(false)
 const hasPdf = computed(() => Boolean(seatingPdfUrl.value))
 const seatingPdfViewUrl = computed(() => buildPdfViewUrl(seatingPdfUrl.value))
+const viewMode = ref<'chart' | 'pdf'>('chart')
+const userSelectedView = ref(false)
 const seatingShellRef = ref<HTMLElement | null>(null)
 const seatingScrollRef = ref<HTMLElement | null>(null)
 const seatingSheetRef = ref<HTMLElement | null>(null)
@@ -224,6 +250,33 @@ const tableRows = computed<SeatingRowItem[][]>(() => {
   }
   return rows
 })
+
+const setViewMode = (mode: 'chart' | 'pdf') => {
+  viewMode.value = mode
+  userSelectedView.value = true
+  if (mode === 'pdf' && isFullscreen.value) {
+    isFullscreen.value = false
+  }
+}
+
+watch(hasPdf, (value) => {
+  if (!value) {
+    viewMode.value = 'chart'
+    userSelectedView.value = false
+    return
+  }
+  if (!userSelectedView.value) {
+    viewMode.value = 'pdf'
+  }
+}, { immediate: true })
+
+watch(viewMode, async (value) => {
+  if (!process.client) return
+  if (value !== 'chart') return
+  await nextTick()
+  applyTransform(panX.value, panY.value, zoom.value)
+})
+
 function toGivenName(fullName?: string) {
   if (!fullName) return ''
   const parts = fullName.trim().split(/\s+/)
@@ -244,10 +297,10 @@ const dateLine = computed(() => {
 function buildPdfViewUrl(url: string) {
   if (!url) return ''
   const [base, hash] = url.split('#')
-  if (!hash) return `${base}#page=1&view=Fit`
+  if (!hash) return `${base}#page=1&zoom=page-width`
   const params = new URLSearchParams(hash)
   if (!params.has('page')) params.set('page', '1')
-  if (!params.has('view') && !params.has('zoom')) params.set('view', 'Fit')
+  if (!params.has('view') && !params.has('zoom')) params.set('zoom', 'page-width')
   return `${base}#${params.toString()}`
 }
 
@@ -294,13 +347,74 @@ function getMinZoom() {
   const sheetEl = seatingSheetRef.value
   if (!scrollEl || !sheetEl) return BASE_MIN_ZOOM
   const baseScale = getBaseScale()
-  const viewWidth = scrollEl.clientWidth
-  const viewHeight = scrollEl.clientHeight
+  const { width: viewWidth, height: viewHeight } = getViewportMetrics()
   const sheetWidth = sheetEl.offsetWidth || 1
   const sheetHeight = sheetEl.offsetHeight || 1
   const fitWidth = viewWidth / sheetWidth / baseScale
   const fitHeight = viewHeight / sheetHeight / baseScale
   return Math.min(BASE_MIN_ZOOM, fitWidth, fitHeight)
+}
+
+function getViewportMetrics() {
+  const scrollEl = seatingScrollRef.value
+  if (!scrollEl || !process.client) return { width: 1, height: 1, offsetX: 0, offsetY: 0 }
+  const style = getComputedStyle(scrollEl)
+  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
+  const paddingRight = Number.parseFloat(style.paddingRight) || 0
+  const paddingTop = Number.parseFloat(style.paddingTop) || 0
+  const paddingBottom = Number.parseFloat(style.paddingBottom) || 0
+  const width = Math.max(1, scrollEl.clientWidth - paddingLeft - paddingRight)
+  const height = Math.max(1, scrollEl.clientHeight - paddingTop - paddingBottom)
+  return { width, height, offsetX: paddingLeft, offsetY: paddingTop }
+}
+
+function parseOriginValue(value: string, size: number) {
+  if (!value) return 0
+  if (value.endsWith('px')) {
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  if (value.endsWith('%')) {
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? (parsed / 100) * size : 0
+  }
+  if (value === 'left' || value === 'top') return 0
+  if (value === 'center') return size / 2
+  if (value === 'right' || value === 'bottom') return size
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function getTransformOrigin(sheetEl: HTMLElement) {
+  if (!process.client) return { x: 0, y: 0 }
+  const style = getComputedStyle(sheetEl)
+  const parts = style.transformOrigin.split(' ')
+  const width = sheetEl.offsetWidth || 1
+  const height = sheetEl.offsetHeight || 1
+  const x = parseOriginValue(parts[0] ?? '0px', width)
+  const y = parseOriginValue(parts[1] ?? '0px', height)
+  return { x, y }
+}
+
+function getZoomPivot(clientX: number, clientY: number) {
+  const scrollEl = seatingScrollRef.value
+  const sheetEl = seatingSheetRef.value
+  if (!scrollEl || !sheetEl) return null
+  const scrollRect = scrollEl.getBoundingClientRect()
+  const view = getViewportMetrics()
+  const origin = getTransformOrigin(sheetEl)
+  return {
+    x: clientX - scrollRect.left - view.offsetX - origin.x,
+    y: clientY - scrollRect.top - view.offsetY - origin.y
+  }
+}
+
+function getAxisBounds(viewSize: number, contentSize: number) {
+  if (contentSize <= viewSize) {
+    const center = (viewSize - contentSize) / 2
+    return { min: center, max: center }
+  }
+  return { min: viewSize - contentSize, max: 0 }
 }
 
 function clampPan(nextX: number, nextY: number, nextZoom: number) {
@@ -311,13 +425,12 @@ function clampPan(nextX: number, nextY: number, nextZoom: number) {
   const totalScale = baseScale * nextZoom
   const scaledWidth = sheetEl.offsetWidth * totalScale
   const scaledHeight = sheetEl.offsetHeight * totalScale
-  const viewWidth = scrollEl.clientWidth
-  const viewHeight = scrollEl.clientHeight
-  const maxX = Math.abs(scaledWidth - viewWidth) / 2
-  const maxY = Math.abs(scaledHeight - viewHeight) / 2
+  const { width: viewWidth, height: viewHeight } = getViewportMetrics()
+  const boundsX = getAxisBounds(viewWidth, scaledWidth)
+  const boundsY = getAxisBounds(viewHeight, scaledHeight)
   return {
-    x: clamp(nextX, -maxX, maxX),
-    y: clamp(nextY, -maxY, maxY)
+    x: clamp(nextX, boundsX.min, boundsX.max),
+    y: clamp(nextY, boundsY.min, boundsY.max)
   }
 }
 
@@ -383,16 +496,14 @@ function onPointerMove(event: PointerEvent) {
     const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
     const center = getCenter(p1, p2)
     const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
-    const scrollRect = seatingScrollRef.value?.getBoundingClientRect()
-    if (!scrollRect) {
+    const pivot = getZoomPivot(center.x, center.y)
+    if (!pivot) {
       applyTransform(panStart.x + deltaCenter.x, panStart.y + deltaCenter.y, nextZoom)
       return
     }
-    const centerX = center.x - scrollRect.left - scrollRect.width / 2
-    const centerY = center.y - scrollRect.top - scrollRect.height / 2
     const scaleChange = nextZoom / zoomStart
-    const nextX = panStart.x + deltaCenter.x + centerX * (1 - scaleChange)
-    const nextY = panStart.y + deltaCenter.y + centerY * (1 - scaleChange)
+    const nextX = panStart.x + deltaCenter.x + pivot.x * (1 - scaleChange)
+    const nextY = panStart.y + deltaCenter.y + pivot.y * (1 - scaleChange)
     applyTransform(nextX, nextY, nextZoom)
   }
 }
@@ -455,16 +566,14 @@ function onTouchMove(event: TouchEvent) {
     const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
     const center = getCenter({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
     const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
-    const scrollRect = seatingScrollRef.value?.getBoundingClientRect()
-    if (!scrollRect) {
+    const pivot = getZoomPivot(center.x, center.y)
+    if (!pivot) {
       applyTransform(panStart.x + deltaCenter.x, panStart.y + deltaCenter.y, nextZoom)
       return
     }
-    const centerX = center.x - scrollRect.left - scrollRect.width / 2
-    const centerY = center.y - scrollRect.top - scrollRect.height / 2
     const scaleChange = nextZoom / zoomStart
-    const nextX = panStart.x + deltaCenter.x + centerX * (1 - scaleChange)
-    const nextY = panStart.y + deltaCenter.y + centerY * (1 - scaleChange)
+    const nextX = panStart.x + deltaCenter.x + pivot.x * (1 - scaleChange)
+    const nextY = panStart.y + deltaCenter.y + pivot.y * (1 - scaleChange)
     applyTransform(nextX, nextY, nextZoom)
   }
 }
@@ -572,12 +681,10 @@ function onWheel(event: WheelEvent) {
     const zoomFactor = Math.exp(-event.deltaY * 0.002)
     const minZoom = getMinZoom()
     const nextZoom = clamp(zoom.value * zoomFactor, minZoom, MAX_ZOOM)
-    const rect = seatingScrollRef.value.getBoundingClientRect()
-    const centerX = event.clientX - rect.left - rect.width / 2
-    const centerY = event.clientY - rect.top - rect.height / 2
+    const pivot = getZoomPivot(event.clientX, event.clientY)
     const scaleChange = nextZoom / zoom.value
-    const nextX = panX.value + centerX * (1 - scaleChange)
-    const nextY = panY.value + centerY * (1 - scaleChange)
+    const nextX = panX.value + (pivot ? pivot.x : 0) * (1 - scaleChange)
+    const nextY = panY.value + (pivot ? pivot.y : 0) * (1 - scaleChange)
     applyTransform(nextX, nextY, nextZoom)
     return
   }
@@ -591,18 +698,11 @@ const handleResize = () => {
 }
 
 function toggleFullscreen() {
-  if (hasPdf.value) {
-    isPdfOpen.value = !isPdfOpen.value
-    if (isPdfOpen.value) {
-      isFullscreen.value = false
-    }
-    return
-  }
+  if (hasPdf.value && viewMode.value !== 'chart') return
   isFullscreen.value = !isFullscreen.value
 }
 
 const fullscreenButtonLabel = computed(() => {
-  if (hasPdf.value) return isPdfOpen.value ? 'PDFを閉じる' : 'PDFで見る'
   return isFullscreen.value ? '閉じる' : '全画面で見る'
 })
 
@@ -643,16 +743,12 @@ const unlockBodyScroll = () => {
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key !== 'Escape') return
-  if (isPdfOpen.value) {
-    isPdfOpen.value = false
-    return
-  }
   if (isFullscreen.value) isFullscreen.value = false
 }
 
 watch(isFullscreen, async (value) => {
   if (!process.client) return
-  if (value || isPdfOpen.value) {
+  if (value) {
     lockBodyScroll()
   } else {
     unlockBodyScroll()
@@ -665,16 +761,6 @@ watch(isFullscreen, async (value) => {
   pointers.clear()
   pinchStartDistance = 0
   applyTransform(0, 0, 1)
-})
-
-watch(isPdfOpen, async (value) => {
-  if (!process.client) return
-  if (value || isFullscreen.value) {
-    lockBodyScroll()
-  } else {
-    unlockBodyScroll()
-  }
-  await nextTick()
 })
 
 onMounted(() => {

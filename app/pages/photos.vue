@@ -17,6 +17,7 @@
               <div class="flex flex-wrap items-center gap-1 text-[10px] uppercase tracking-[0.28em] text-white/55">
               </div>
 
+              <p v-if="photo.body" class="mt-2 text-sm text-white/70">{{ photo.body }}</p>
               <div class="mt-3 share-frame share-frame--compact">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <p class="share-frame__title">Files</p>
@@ -32,7 +33,7 @@
                     ref="fileInput"
                     type="file"
                     class="sr-only"
-                    accept="image/*,video/*"
+                    accept="image/*"
                     multiple
                     @change="onFileChange"
                   />
@@ -53,22 +54,12 @@
                       class="share-preview__item"
                     >
                       <img
-                        v-if="!item.isVideo"
                         :src="item.url"
                         :alt="item.file.name"
                         class="share-preview__media"
                         loading="lazy"
                         decoding="async"
                       />
-                      <video
-                        v-else
-                        :src="item.url"
-                        class="share-preview__media"
-                        muted
-                        playsinline
-                        preload="metadata"
-                      ></video>
-                      <span v-if="item.isVideo" class="share-preview__badge">VIDEO</span>
                       <button type="button" class="share-preview__remove" @click="removeFile(idx)" aria-label="削除">×</button>
                     </div>
                   </div>
@@ -187,7 +178,6 @@
               <div v-else class="mt-3 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-5 text-center text-xs text-white/60">
                 まだ写真がありません 送ってくれた写真がここに表示されます 
               </div>
-              <p class="mt-2 text-[10px] text-white/55">動画は保存されますが スライドショーには表示されません </p>
             </div>
           </div>
 
@@ -220,16 +210,17 @@ const hasBackupLink = computed(() => {
   return Boolean(link)
 })
 
-const MAX_FILES = 20
+const MAX_FILES = 10
 const NAME_KEY = 'wedding-photo-sender'
 const SLIDE_GROUP_LIMIT = 11
 const SLIDE_GROUP_SIZE = 4
 const AUTO_REFRESH_MS = 60000
-const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.mp4', '.mov']
+const MAX_PARALLEL_UPLOADS = 5
+const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']
 
 const senderName = ref('')
 
-type SelectedItem = { file: File; url: string; isVideo: boolean }
+type SelectedItem = { file: File; url: string }
 const selectedItems = ref<SelectedItem[]>([])
 const uploadState = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
 const uploadError = ref('')
@@ -348,10 +339,10 @@ const addFiles = (files: FileList) => {
   const next = [...selectedItems.value]
   for (const file of Array.from(files)) {
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
-    const isAllowedType = file.type.startsWith('image/') || file.type.startsWith('video/')
+    const isAllowedType = file.type.startsWith('image/')
     const isAllowedExt = ALLOWED_EXTS.includes(ext)
     if (!isAllowedType && !isAllowedExt) {
-      uploadError.value = '画像または動画のみ送信できます'
+      uploadError.value = '画像のみ送信できます'
       continue
     }
     if (next.length >= MAX_FILES) {
@@ -359,7 +350,7 @@ const addFiles = (files: FileList) => {
       break
     }
     const url = URL.createObjectURL(file)
-    next.push({ file, url, isVideo: file.type.startsWith('video/') })
+    next.push({ file, url })
   }
   selectedItems.value = next
   uploadState.value = 'idle'
@@ -467,9 +458,10 @@ const uploadFiles = async () => {
   if (!canUpload.value) return
   uploadState.value = 'uploading'
   uploadError.value = ''
+  const items = [...selectedItems.value]
   try {
     const payload = {
-      files: selectedItems.value.map((item) => ({
+      files: items.map((item) => ({
         name: item.file.name,
         type: item.file.type,
         size: item.file.size
@@ -485,12 +477,7 @@ const uploadFiles = async () => {
       throw new Error('No presigned uploads returned')
     }
 
-    for (let i = 0; i < selectedItems.value.length; i += 1) {
-      const item = selectedItems.value[i]
-      const target = presign.uploads[i]
-      if (!item || !target) {
-        throw new Error('Upload mapping mismatch')
-      }
+    const uploadItem = async (item: SelectedItem, target: PresignUpload) => {
       const response = await fetch(target.url, {
         method: 'PUT',
         headers: target.headers || {},
@@ -507,6 +494,24 @@ const uploadFiles = async () => {
         throw new Error(message)
       }
     }
+
+    let cursor = 0
+    const workerCount = Math.min(MAX_PARALLEL_UPLOADS, items.length)
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = cursor
+        cursor += 1
+        if (index >= items.length) return
+        const item = items[index]
+        const target = presign.uploads[index]
+        if (!item || !target) {
+          throw new Error('Upload mapping mismatch')
+        }
+        await uploadItem(item, target)
+      }
+    })
+
+    await Promise.all(workers)
 
     clearSelected()
     uploadState.value = 'done'
