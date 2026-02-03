@@ -7,7 +7,7 @@
           <h1 class="mt-2 font-display text-3xl text-gold">三宅家で導入して良かったもの</h1>
           <p class="mt-2 text-sm text-white/85">独断と偏見ランキング</p>
         </div>
-        <NuxtLink to="/" class="btn-secondary btn-sm justify-center whitespace-nowrap">ホームへ戻る</NuxtLink>
+        <NuxtLink to="/" class="btn-secondary btn-sm justify-center whitespace-nowrap home-back-btn">ホームへ戻る</NuxtLink>
       </div>
 
       <p class="text-sm leading-relaxed text-white/70">
@@ -29,7 +29,7 @@
                 <NuxtImg
                   :src="item.image"
                   :alt="item.imageAlt"
-                  class="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                  class="h-full w-full object-cover transition duration-200"
                   width="720"
                   height="540"
                   sizes="xs:92vw sm:90vw md:88vw lg:86vw xl:84vw 2xl:640px"

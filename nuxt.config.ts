@@ -44,7 +44,14 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#BDA06A' }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/shared/favicon.ico' },
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico?v=2' },
+        { rel: 'shortcut icon', href: '/favicon.ico?v=2' },
+        { rel: 'icon', type: 'image/png', sizes: 'any', href: '/shared/favicon.png?v=2' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png?v=2' },
+        { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/favicon-192.png?v=2' },
+        { rel: 'icon', type: 'image/png', sizes: '512x512', href: '/favicon-512.png?v=2' },
+        { rel: 'icon', type: 'image/png', sizes: '1024x1024', href: '/favicon.png?v=2' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png?v=2' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         // Preload stylesheet to speed up first render

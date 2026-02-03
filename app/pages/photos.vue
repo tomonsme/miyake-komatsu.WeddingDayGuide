@@ -7,7 +7,7 @@
           <h1 class="mt-2 font-display text-3xl text-gold">{{ photo.title }}</h1>
           <p v-if="photo.subtitle" class="mt-2 text-sm text-white/85">{{ photo.subtitle }}</p>
         </div>
-        <NuxtLink to="/" class="btn-secondary btn-sm justify-center whitespace-nowrap">ホームへ戻る</NuxtLink>
+        <NuxtLink to="/" class="btn-secondary btn-sm justify-center whitespace-nowrap home-back-btn">ホームへ戻る</NuxtLink>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -15,9 +15,6 @@
           <div class="luxe-card">
             <div class="luxe-card__inner p-4">
               <div class="flex flex-wrap items-center gap-1 text-[10px] uppercase tracking-[0.28em] text-white/55">
-                <span class="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 leading-tight">1 ファイル</span>
-                <span class="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 leading-tight">2 お名前</span>
-                <span class="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 leading-tight">3 送信</span>
               </div>
 
               <div class="mt-3 share-frame share-frame--compact">
@@ -80,7 +77,7 @@
                     <span>{{ totalSizeLabel }}</span>
                     <button
                       type="button"
-                      class="text-[10px] uppercase tracking-[0.28em] text-white/60 transition hover:text-white disabled:opacity-60"
+                      class="text-[10px] uppercase tracking-[0.28em] text-white/60 transition disabled:opacity-60"
                       :disabled="uploadState === 'uploading'"
                       @click="clearSelected"
                     >

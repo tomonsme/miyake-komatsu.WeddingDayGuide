@@ -109,7 +109,6 @@
             </span>
           </div>
           <p class="mt-1 text-sm text-white/85">会場内でリアルタイム更新</p>
-          <p class="mt-0.5 text-[10px] text-white/55">※上位3名のみ表示</p>
           <p v-if="lastUpdatedLabel" class="mt-0.5 text-xs text-white/55">更新: {{ lastUpdatedLabel }}</p>
           <p v-if="leaderboardError" class="mt-1 text-xs text-rose-200">{{ leaderboardError }}</p>
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -382,6 +381,7 @@ const nowTick = ref(Date.now())
 
 const MAX_LEADERBOARD_ENTRIES = 3
 const OPTIMISTIC_ENTRY_TTL_MS = 20000
+const SUBMIT_REVEAL_DELAY_MS = 5000
 const POLL_FAST_MS = 2000
 const POLL_SLOW_MS = 6000
 const STREAM_STALE_MS = 30000
@@ -398,11 +398,20 @@ const sortStopEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
 }
 
 const optimisticEntries = new Map<string, { entry: LeaderboardEntry; expiresAt: number }>()
+const pendingRevealEntries = new Map<string, number>()
 
 const pruneOptimisticEntries = (now = Date.now()) => {
   for (const [id, item] of optimisticEntries.entries()) {
     if (item.expiresAt <= now) {
       optimisticEntries.delete(id)
+    }
+  }
+}
+
+const prunePendingRevealEntries = (now = Date.now()) => {
+  for (const [id, revealAt] of pendingRevealEntries.entries()) {
+    if (revealAt <= now) {
+      pendingRevealEntries.delete(id)
     }
   }
 }
@@ -420,14 +429,26 @@ const limitEntries = (entries: LeaderboardEntry[], game: GameId) => {
 const reconcileLeaderboardSnapshot = (snapshot: LeaderboardSnapshot) => {
   const now = Date.now()
   pruneOptimisticEntries(now)
+  prunePendingRevealEntries(now)
 
   const idsInSnapshot = new Set<string>()
   snapshot.tap10.forEach((entry) => idsInSnapshot.add(entry.id))
   snapshot.stop11.forEach((entry) => idsInSnapshot.add(entry.id))
   idsInSnapshot.forEach((id) => optimisticEntries.delete(id))
 
+  const filteredEntries = (entries: LeaderboardEntry[]) =>
+    entries.filter((entry) => {
+      const revealAt = pendingRevealEntries.get(entry.id)
+      if (!revealAt) return true
+      if (revealAt <= now) {
+        pendingRevealEntries.delete(entry.id)
+        return true
+      }
+      return false
+    })
+
   const mergeForGame = (game: GameId, entries: LeaderboardEntry[]) => {
-    const merged = [...entries]
+    const merged = [...filteredEntries(entries)]
     for (const item of optimisticEntries.values()) {
       if (item.entry.game !== game) continue
       if (merged.some((existing) => existing.id === item.entry.id)) continue
@@ -511,7 +532,8 @@ const lastUpdatedLabel = computed(() => {
   if (!leaderboardUpdatedAt.value) return ''
   return new Date(leaderboardUpdatedAt.value).toLocaleTimeString('ja-JP', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    second: '2-digit'
   })
 })
 
@@ -833,11 +855,15 @@ const submitScore = async (game: GameId, score: number, meta?: { timeMs?: number
       }
     }
     if (entry) {
-      mergeLeaderboardEntry(entry)
-      void ensureEntryVisible(entry)
+      pendingRevealEntries.set(entry.id, Date.now() + SUBMIT_REVEAL_DELAY_MS)
+      setTimeout(() => {
+        pendingRevealEntries.delete(entry.id)
+        mergeLeaderboardEntry(entry)
+        void ensureEntryVisible(entry)
+        void refreshLeaderboardWithRetry()
+      }, SUBMIT_REVEAL_DELAY_MS)
     }
     stateRef.value = 'done'
-    void refreshLeaderboardWithRetry()
     setTimeout(() => {
       stateRef.value = 'idle'
     }, 1600)

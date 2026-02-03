@@ -7,7 +7,7 @@
           <h1 class="mt-2 font-display text-3xl text-gold">メッセージ</h1>
           <p class="mt-2 text-sm text-white/85">ご挨拶</p>
         </div>
-        <NuxtLink to="/" class="btn-secondary btn-sm justify-center">ホームへ戻る</NuxtLink>
+        <NuxtLink to="/" class="btn-secondary btn-sm justify-center home-back-btn">ホームへ戻る</NuxtLink>
       </div>
 
       <div class="message-card message-card--clear">

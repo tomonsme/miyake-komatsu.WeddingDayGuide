@@ -7,7 +7,7 @@
           <h1 class="mt-2 font-display text-3xl text-gold">プロフィール</h1>
           <p class="mt-2 text-sm text-white/85">新郎新婦のご紹介</p>
         </div>
-        <NuxtLink to="/" class="btn-secondary btn-sm justify-center">ホームへ戻る</NuxtLink>
+        <NuxtLink to="/" class="btn-secondary btn-sm justify-center home-back-btn">ホームへ戻る</NuxtLink>
       </div>
 
       <div class="paper-sheet">
