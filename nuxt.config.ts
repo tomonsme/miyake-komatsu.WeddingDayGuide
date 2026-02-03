@@ -72,23 +72,31 @@ export default defineNuxtConfig({
       }
     : {},
   image: {
-    domains: [],
+    domains: ['www.aladdinx.jp'],
+    screens: {
+      xs: 320,
+      sm: 360,
+      md: 390,
+      lg: 430,
+      xl: 480,
+      '2xl': 640
+    },
     presets: {
       hero: {
         // Revert to JPG to ensure compatibility with local static images
-        modifiers: { fit: 'cover', format: 'jpg', quality: 80 }
+        modifiers: { fit: 'cover', format: 'jpg', quality: 76 }
       },
       story: {
-        modifiers: { fit: 'cover', format: 'jpg', quality: 70 }
+        modifiers: { fit: 'cover', format: 'webp', quality: 65 }
       },
       storyContain: {
-        modifiers: { fit: 'contain', format: 'jpg', quality: 70 }
+        modifiers: { fit: 'contain', format: 'webp', background: 'transparent', quality: 68 }
       },
       album: {
-        modifiers: { fit: 'cover', format: 'jpg', quality: 75 }
+        modifiers: { fit: 'cover', format: 'webp', quality: 68 }
       },
       avatar: {
-        modifiers: { fit: 'cover', format: 'jpg', quality: 80 }
+        modifiers: { fit: 'cover', format: 'webp', quality: 75 }
       },
       icon: {
         modifiers: { fit: 'cover', format: 'png', quality: 80 }

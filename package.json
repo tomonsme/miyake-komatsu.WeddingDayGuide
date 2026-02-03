@@ -5,6 +5,7 @@
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
+    "export:seating-pdf": "node scripts/export-seating-pdf.mjs",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
@@ -25,6 +26,8 @@
   },
   "devDependencies": {
     "@vueuse/motion": "^2.2.6",
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.58.1",
     "sharp": "^0.34.4"
   }
 }

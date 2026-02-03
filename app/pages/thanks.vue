@@ -1,6 +1,6 @@
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-ink to-midnight text-white">
-    <section class="mx-auto w-full max-w-screen-lg px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+  <main class="bg-gradient-to-b from-ink to-midnight text-white">
+    <section class="mx-auto w-full max-w-screen-lg px-4 pt-12 pb-4 sm:px-6 sm:pt-16 sm:pb-6 md:pt-20">
       <div class="mb-6 flex items-start justify-between gap-4 sm:mb-8">
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-white/85">Thanks</p>
@@ -26,10 +26,14 @@
                 class="group aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-black/30 md:aspect-auto md:h-full"
                 :aria-label="`${item.title}のリンクへ移動`"
               >
-                <img
+                <NuxtImg
                   :src="item.image"
                   :alt="item.imageAlt"
                   class="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                  width="720"
+                  height="540"
+                  sizes="xs:92vw sm:90vw md:88vw lg:86vw xl:84vw 2xl:640px"
+                  preset="album"
                   loading="lazy"
                   decoding="async"
                 />

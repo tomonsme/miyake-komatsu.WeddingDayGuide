@@ -25,6 +25,7 @@ export type EventConfig = {
   venueName?: string
   venueRoom?: string
   monogramUrl?: string
+  seatingPdfUrl?: string
   seating?: SeatingPlan
   notes?: NoteItem[]
   photoShare?: PhotoShareInfo
@@ -87,6 +88,7 @@ export function useEventData() {
   const displayCouple = computed(() => event.value.couple || 'Wedding Day')
   const venue = computed(() => event.value.venueName || '')
   const venueRoom = computed(() => event.value.venueRoom || '')
+  const seatingPdfUrl = computed(() => event.value.seatingPdfUrl || '')
 
   const seating = computed(() => event.value.seating || DEFAULT_EVENT.seating)
   const notes = computed(() => (event.value.notes && event.value.notes.length) ? event.value.notes : DEFAULT_EVENT.notes)
@@ -110,6 +112,7 @@ export function useEventData() {
     displayCouple,
     venue,
     venueRoom,
+    seatingPdfUrl,
     seating,
     notes,
     photoShare,

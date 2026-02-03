@@ -1,6 +1,6 @@
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-ink to-midnight text-white">
-    <section class="mx-auto w-full max-w-screen-lg px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+  <main class="bg-gradient-to-b from-ink to-midnight text-white">
+    <section class="mx-auto w-full max-w-screen-lg px-4 pt-12 pb-4 sm:px-6 sm:pt-16 sm:pb-6 md:pt-20">
       <div class="mb-6 flex items-start justify-between gap-4 sm:mb-8">
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-white/80">Favorites</p>
@@ -15,17 +15,18 @@
           <p class="text-xs uppercase tracking-[0.3em] text-white/75">Album</p>
           <div class="mt-4 grid gap-4">
             <figure v-for="(photo, idx) in photos" :key="photo.src" class="overflow-hidden rounded-2xl border border-gold/20 bg-black/30">
-              <NuxtImg
-                :src="photo.src"
-                :alt="photo.title"
-                class="aspect-[4/3] h-auto w-full object-cover"
-                :style="photo.position ? { objectPosition: photo.position } : undefined"
-                width="960"
-                height="720"
-                preset="album"
-                loading="lazy"
-                decoding="async"
-              />
+                <NuxtImg
+                  :src="photo.src"
+                  :alt="photo.title"
+                  class="aspect-[4/3] h-auto w-full object-cover"
+                  :style="photo.position ? { objectPosition: photo.position } : undefined"
+                  width="960"
+                  height="720"
+                  sizes="xs:92vw sm:90vw md:88vw lg:86vw xl:84vw 2xl:640px"
+                  preset="album"
+                  loading="lazy"
+                  decoding="async"
+                />
               <figcaption class="border-t border-gold/10 bg-black/40 px-4 py-3 text-sm text-white/80">
                 {{ photo.title }}
               </figcaption>

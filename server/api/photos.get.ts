@@ -1,10 +1,13 @@
-import { createError, getQuery } from 'h3'
+import { createError, getQuery, setHeader } from 'h3'
 import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { extname } from 'node:path'
 import { getS3Client, getS3Config, toPublicUrl } from '../utils/s3'
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'])
+const CACHE_TTL_MS = 20000
+
+const galleryCache = new Map<string, { expiresAt: number; payload: { items: { key: string; url: string; lastModified: string }[]; total: number } }>()
 
 const isImageKey = (key: string) => IMAGE_EXTS.has(extname(key).toLowerCase())
 const shuffleInPlace = <T>(items: T[]) => {
@@ -21,12 +24,24 @@ const toErrorPayload = (err: unknown) => {
 
 export default defineEventHandler(async (event) => {
   try {
+    setHeader(event, 'Cache-Control', 'no-store')
     const config = getS3Config()
     const { region, bucket, publicBaseUrl } = config
     const s3 = getS3Client(config)
     const rawLimit = Number(getQuery(event).limit ?? 40)
+    const rawOrder = String(getQuery(event).order ?? 'random')
+    const order = rawOrder === 'latest' ? 'latest' : 'random'
+    const rawFresh = getQuery(event).fresh
+    const fresh = rawFresh === '1' || rawFresh === 'true'
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 40
     const listPrefix = undefined
+
+    const cacheKey = `${bucket}:${order}:${limit}`
+    const now = Date.now()
+    if (!fresh) {
+      const cached = galleryCache.get(cacheKey)
+      if (cached && cached.expiresAt > now) return cached.payload
+    }
 
     const objects: { Key?: string; LastModified?: Date }[] = []
     let token: string | undefined
@@ -57,8 +72,10 @@ export default defineEventHandler(async (event) => {
         key: item.Key as string,
         lastModified: item.LastModified?.toISOString() || ''
       }))
-    shuffleInPlace(candidates)
-    const selected = candidates.slice(0, limit)
+    const ordered = order === 'latest'
+      ? candidates.sort((a, b) => b.lastModified.localeCompare(a.lastModified))
+      : shuffleInPlace(candidates)
+    const selected = ordered.slice(0, limit)
 
     const items = publicBaseUrl
       ? selected.map((item) => ({ ...item, url: toPublicUrl(publicBaseUrl, item.key) }))
@@ -71,7 +88,9 @@ export default defineEventHandler(async (event) => {
         )
       })))
 
-    return { items }
+    const payload = { items, total: candidates.length }
+    galleryCache.set(cacheKey, { expiresAt: now + CACHE_TTL_MS, payload })
+    return payload
   } catch (err) {
     console.error('photos.get failed', toErrorPayload(err))
     throw err

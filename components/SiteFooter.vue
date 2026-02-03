@@ -1,5 +1,5 @@
 <template>
-  <footer class="mt-12 border-t border-[#DCC08E]/30 bg-gradient-to-b from-[#0E1828] to-[#111E33]">
+  <footer class="mt-6 sm:mt-8 border-t border-[#DCC08E]/30 bg-gradient-to-b from-[#0E1828] to-[#111E33]">
     <div class="mx-auto max-w-screen-lg px-6 py-3">
       <div class="mb-2 flex flex-col items-center">
         <span class="block h-px w-12 bg-[#DCC08E]/50"></span>

@@ -226,8 +226,6 @@ const writeEntriesToS3 = async (
   }
   if (etag) {
     params.IfMatch = etag
-  } else {
-    params.IfNoneMatch = '*'
   }
   const response = await s3.send(new PutObjectCommand(params))
   return response.ETag ?? null
@@ -323,6 +321,7 @@ const queueWrite = async <T>(task: () => Promise<T>): Promise<T> => {
 }
 
 export const addEntry = async (input: {
+  id?: string
   game: GameId
   name: string
   score: number
@@ -335,8 +334,12 @@ export const addEntry = async (input: {
   const score = Math.max(0, Math.round(input.score))
   const meta = sanitizeMeta(input.meta)
 
+  const id = typeof input.id === 'string' && input.id.trim()
+    ? input.id.trim().slice(0, 64)
+    : randomUUID()
+
   const entry: LeaderboardEntry = {
-    id: randomUUID(),
+    id,
     game: input.game,
     name,
     score,
@@ -347,6 +350,7 @@ export const addEntry = async (input: {
   return queueWrite(async () => {
     const s3Config = getS3ConfigSafe()
     if (s3Config) {
+      let lastError: unknown = null
       for (let attempt = 0; attempt < STORAGE_WRITE_ATTEMPTS; attempt += 1) {
         const { entries: storedEntries, etag } = await loadStoredEntriesFromS3(s3Config)
         const merged = mergeEntries(storedEntries, state.entries, [entry])
@@ -356,11 +360,22 @@ export const addEntry = async (input: {
           updateStateEntries(nextEntries)
           return entry
         } catch (err) {
+          lastError = err
           if (isPreconditionFailed(err)) continue
           throw err
         }
       }
-      throw new Error('Leaderboard storage busy')
+      // Fallback to an unconditional write when the store does not support ETags.
+      try {
+        const { entries: storedEntries } = await loadStoredEntriesFromS3(s3Config)
+        const merged = mergeEntries(storedEntries, state.entries, [entry])
+        const nextEntries = pruneEntriesList(merged)
+        await writeEntriesToS3(s3Config, nextEntries, null)
+        updateStateEntries(nextEntries)
+        return entry
+      } catch (err) {
+        throw (lastError ?? err) as Error
+      }
     }
 
     const storedEntries = await loadStoredEntriesFromDisk()

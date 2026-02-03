@@ -1,5 +1,13 @@
 <template>
   <main class="game-arcade min-h-screen">
+    <div
+      v-if="tapActive"
+      class="game-tap-overlay"
+      @pointerdown.prevent="tapHit"
+      @touchmove.prevent
+      @wheel.prevent
+      aria-hidden="true"
+    ></div>
     <section class="game-screen">
       <div class="dq-header">
         <div class="dq-title-panel">
@@ -101,13 +109,13 @@
             </span>
           </div>
           <p class="mt-1 text-sm text-white/85">会場内でリアルタイム更新</p>
+          <p class="mt-0.5 text-[10px] text-white/55">※上位3名のみ表示</p>
           <p v-if="lastUpdatedLabel" class="mt-0.5 text-xs text-white/55">更新: {{ lastUpdatedLabel }}</p>
           <p v-if="leaderboardError" class="mt-1 text-xs text-rose-200">{{ leaderboardError }}</p>
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
               <div class="flex items-center justify-between">
                 <p class="dq-label text-white/60">10秒タップ</p>
-                <span v-if="tapBest > 0" class="score-pill">Best {{ tapBest }}</span>
               </div>
               <ol v-if="leaderboard.tap10.length" class="mt-2 space-y-2 text-xs">
                 <li
@@ -125,7 +133,6 @@
             <div>
               <div class="flex items-center justify-between">
                 <p class="dq-label text-white/60">11.11秒ストップ</p>
-                <span v-if="stopBestDelta !== null" class="score-pill">Best Δ {{ formatDelta(stopBestDelta) }}</span>
               </div>
               <ol v-if="leaderboard.stop11.length" class="mt-2 space-y-2 text-xs">
                 <li
@@ -191,7 +198,9 @@
                         class="game-pad"
                         :class="{ 'is-active': tapActive }"
                         :disabled="!tapActive"
-                        @click="tapHit"
+                        @pointerdown.prevent="tapHit"
+                        @keydown.space.prevent="tapHit"
+                        @keydown.enter.prevent="tapHit"
                       >
                         <span class="game-pad__label">タップ</span>
                         <span class="game-pad__sub">{{ tapActive ? '連打！' : 'スタート後にタップ' }}</span>
@@ -464,6 +473,32 @@ const mergeLeaderboardEntry = (entry: LeaderboardEntry) => {
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const createEntryId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+const isEntryVisible = (entry: LeaderboardEntry) =>
+  leaderboard.value[entry.game].some((item) => item.id === entry.id)
+const shouldExpectEntryVisible = (entry: LeaderboardEntry) => {
+  const list = leaderboard.value[entry.game]
+  if (list.length < MAX_LEADERBOARD_ENTRIES) return true
+  const worst = list[list.length - 1]
+  if (!worst) return true
+  if (entry.game === 'tap10') return entry.score > worst.score
+  return entry.score < worst.score
+}
+const ensureEntryVisible = async (entry: LeaderboardEntry) => {
+  if (!shouldExpectEntryVisible(entry)) return
+  if (isEntryVisible(entry)) return
+  const attempts = 3
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await wait(600 * (attempt + 1))
+    await refreshLeaderboardWithRetry(2)
+    if (isEntryVisible(entry)) return
+  }
+}
 
 const formatSeconds = (ms: number) => (ms / 1000).toFixed(2)
 const formatDelta = (ms: number) => `${formatSeconds(ms)}s`
@@ -627,26 +662,33 @@ const tapStatusClass = computed(() => {
   return 'game-chip--ready'
 })
 
-let tapTicker: ReturnType<typeof setInterval> | null = null
+let tapRaf: number | null = null
 let tapStartAt = 0
 
-const tapStart = () => {
-  if (tapTicker) {
-    clearInterval(tapTicker)
-    tapTicker = null
+const stopTapRaf = () => {
+  if (tapRaf === null) return
+  cancelAnimationFrame(tapRaf)
+  tapRaf = null
+}
+
+const tapTick = (now: number) => {
+  const elapsed = now - tapStartAt
+  const left = Math.max(0, tapDurationMs - elapsed)
+  tapTimeLeftMs.value = left
+  if (left <= 0) {
+    tapStop()
+    return
   }
+  tapRaf = requestAnimationFrame(tapTick)
+}
+
+const tapStart = () => {
+  stopTapRaf()
   tapScore.value = 0
   tapTimeLeftMs.value = tapDurationMs
   tapActive.value = true
   tapStartAt = performance.now()
-  tapTicker = setInterval(() => {
-    const elapsed = performance.now() - tapStartAt
-    const left = Math.max(0, tapDurationMs - elapsed)
-    tapTimeLeftMs.value = left
-    if (left <= 0) {
-      tapStop()
-    }
-  }, 50)
+  tapRaf = requestAnimationFrame(tapTick)
 }
 
 const saveTapBest = () => {
@@ -656,10 +698,7 @@ const saveTapBest = () => {
 
 const tapStop = () => {
   tapActive.value = false
-  if (tapTicker) {
-    clearInterval(tapTicker)
-    tapTicker = null
-  }
+  stopTapRaf()
   tapTimeLeftMs.value = 0
   if (tapScore.value > tapBest.value) {
     tapBest.value = tapScore.value
@@ -704,8 +743,19 @@ const stopStatusClass = computed(() => {
   return 'game-chip--ready'
 })
 
-let stopTicker: ReturnType<typeof setInterval> | null = null
+let stopRaf: number | null = null
 let stopStartAt = 0
+
+const stopStopRaf = () => {
+  if (stopRaf === null) return
+  cancelAnimationFrame(stopRaf)
+  stopRaf = null
+}
+
+const stopTick = (now: number) => {
+  stopElapsedMs.value = now - stopStartAt
+  stopRaf = requestAnimationFrame(stopTick)
+}
 
 const saveStopBest = () => {
   if (typeof window === 'undefined' || stopBestDelta.value === null) return
@@ -713,17 +763,12 @@ const saveStopBest = () => {
 }
 
 const stopStart = () => {
-  if (stopTicker) {
-    clearInterval(stopTicker)
-    stopTicker = null
-  }
+  stopStopRaf()
   stopElapsedMs.value = 0
   stopResultMs.value = null
   stopActive.value = true
   stopStartAt = performance.now()
-  stopTicker = setInterval(() => {
-    stopElapsedMs.value = performance.now() - stopStartAt
-  }, 20)
+  stopRaf = requestAnimationFrame(stopTick)
 }
 
 const stopStop = () => {
@@ -731,10 +776,7 @@ const stopStop = () => {
   stopElapsedMs.value = performance.now() - stopStartAt
   stopResultMs.value = stopElapsedMs.value
   stopActive.value = false
-  if (stopTicker) {
-    clearInterval(stopTicker)
-    stopTicker = null
-  }
+  stopStopRaf()
   const delta = Math.abs(stopElapsedMs.value - stopTargetMs)
   if (stopBestDelta.value === null || delta < stopBestDelta.value) {
     stopBestDelta.value = Math.round(delta)
@@ -743,10 +785,7 @@ const stopStop = () => {
 }
 
 const stopReset = () => {
-  if (stopTicker) {
-    clearInterval(stopTicker)
-    stopTicker = null
-  }
+  stopStopRaf()
   stopActive.value = false
   stopElapsedMs.value = 0
   stopResultMs.value = null
@@ -772,18 +811,30 @@ const submitScore = async (game: GameId, score: number, meta?: { timeMs?: number
   if (!name) return
   if (!stateRef) return
   stateRef.value = 'saving'
+  const entryId = createEntryId()
   try {
-    const entry = await $fetch<LeaderboardEntry>('/api/leaderboard', {
-      method: 'POST',
-      body: {
-        game,
-        name,
-        score,
-        meta
+    let entry: LeaderboardEntry | null = null
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        entry = await $fetch<LeaderboardEntry>('/api/leaderboard', {
+          method: 'POST',
+          body: {
+            id: entryId,
+            game,
+            name,
+            score,
+            meta
+          }
+        })
+        break
+      } catch (err) {
+        if (attempt >= 1) throw err
+        await wait(400 * (attempt + 1))
       }
-    })
+    }
     if (entry) {
       mergeLeaderboardEntry(entry)
+      void ensureEntryVisible(entry)
     }
     stateRef.value = 'done'
     void refreshLeaderboardWithRetry()
@@ -849,8 +900,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (tapTicker) clearInterval(tapTicker)
-  if (stopTicker) clearInterval(stopTicker)
+  stopTapRaf()
+  stopStopRaf()
   if (eventSource) {
     eventSource.close()
     eventSource = null

@@ -24,8 +24,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const meta = body.meta && typeof body.meta === 'object' ? body.meta : undefined
+  const id = typeof body.id === 'string' ? body.id.trim() : undefined
 
   return await addEntry({
+    id,
     game,
     name,
     score,

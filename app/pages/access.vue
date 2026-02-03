@@ -1,6 +1,6 @@
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-ink to-midnight text-white">
-    <section class="mx-auto w-full max-w-md px-4 py-16 sm:py-20">
+  <main class="bg-gradient-to-b from-ink to-midnight text-white">
+    <section class="mx-auto w-full max-w-md px-4 pt-16 pb-4 sm:pt-20 sm:pb-6">
       <div class="luxe-card">
         <div class="luxe-card__inner">
           <p class="text-xs uppercase tracking-[0.3em] text-white/80">Access</p>

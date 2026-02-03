@@ -1,6 +1,6 @@
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-ink to-midnight text-white">
-    <section class="mx-auto w-full max-w-screen-lg px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+  <main class="bg-gradient-to-b from-ink to-midnight text-white">
+    <section class="mx-auto w-full max-w-screen-lg px-4 pt-12 pb-4 sm:px-6 sm:pt-16 sm:pb-6 md:pt-20">
       <div class="mb-6 flex items-start justify-between gap-4 sm:mb-8">
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-white/85">Seating</p>
@@ -10,33 +10,37 @@
         <NuxtLink to="/" class="btn-secondary btn-sm justify-center">ホームへ戻る</NuxtLink>
       </div>
 
-      <div ref="seatingShellRef" class="seating-shell">
+      <div
+        ref="seatingShellRef"
+        class="seating-shell"
+        :class="{ 'seating-shell--fullscreen': isFullscreen }"
+      >
         <div class="seating-controls sm:hidden">
-          <div v-if="!isPdfOpen" class="seating-hints">
+          <div v-if="!isFullscreen" class="seating-hints">
             <span class="seating-pill">横向き推奨</span>
             <span class="seating-pill">横にスクロール</span>
           </div>
           <button
             type="button"
             class="seating-fullscreen-btn"
-            @click="togglePdf"
+            @click="toggleFullscreen"
           >
-            {{ isPdfOpen ? '閉じる' : '全画面で見る' }}
+            {{ fullscreenButtonLabel }}
           </button>
         </div>
         <div
           ref="seatingScrollRef"
           class="seating-scroll"
-          v-show="!isPdfOpen"
+          :class="{ 'seating-scroll--fullscreen': isFullscreen }"
           @pointerdown="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
           @pointercancel="onPointerUp"
           @touchstart="onTouchStart"
-          @touchmove.prevent="onTouchMove"
+          @touchmove="onTouchMove"
           @touchend="onTouchEnd"
           @touchcancel="onTouchEnd"
-          @wheel.prevent="onWheel"
+          @wheel="onWheel"
         >
         <div ref="seatingSheetRef" class="seating-sheet">
           <div class="seating-header">
@@ -145,16 +149,24 @@
           </div>
         </div>
         </div>
-        <div v-if="isPdfOpen" class="seating-pdf-overlay">
-          <div class="seating-pdf-actions">
-            <a class="seating-fullscreen-btn" :href="seatingPdfPath" download>PDFを保存</a>
-            <button type="button" class="seating-fullscreen-btn" @click="closePdf">閉じる</button>
-          </div>
-          <iframe class="seating-pdf-frame" :src="seatingPdfUrl" title="席次表 PDF"></iframe>
-        </div>
       </div>
       <p class="mt-3 hidden text-xs text-white/70 sm:block">※ 横にスクロールできます</p>
     </section>
+    <div v-if="isPdfOpen" class="seating-pdf-overlay" role="dialog" aria-modal="true">
+      <div class="seating-pdf-actions">
+        <a
+          v-if="seatingPdfUrl"
+          :href="seatingPdfUrl"
+          target="_blank"
+          rel="noopener"
+          class="seating-fullscreen-btn"
+        >
+          別タブで開く
+        </a>
+        <button type="button" class="seating-fullscreen-btn" @click="isPdfOpen = false">閉じる</button>
+      </div>
+      <iframe class="seating-pdf-frame" :src="seatingPdfUrl" title="席次表PDF"></iframe>
+    </div>
   </main>
 </template>
 
@@ -168,11 +180,11 @@ type SeatingRowItem =
   | { kind: 'table'; span: 1; table: SeatingTable }
   | { kind: 'pair'; span: 2; tables: [SeatingTable, SeatingTable] }
 
-const { displayCouple, seating, profile, displayDateParts, venue, venueRoom } = useEventData()
+const { displayCouple, seating, seatingPdfUrl, profile, displayDateParts, venue, venueRoom } = useEventData()
 const tables = computed(() => seating.value?.tables ?? [])
+const isFullscreen = ref(false)
 const isPdfOpen = ref(false)
-const seatingPdfPath = '/pages/seating/seating.pdf'
-const seatingPdfUrl = `${seatingPdfPath}#view=Fit`
+const hasPdf = computed(() => Boolean(seatingPdfUrl.value))
 const seatingShellRef = ref<HTMLElement | null>(null)
 const seatingScrollRef = ref<HTMLElement | null>(null)
 const seatingSheetRef = ref<HTMLElement | null>(null)
@@ -182,13 +194,16 @@ const zoom = ref(1)
 const pointers = new Map<number, { x: number; y: number }>()
 let dragStart = { x: 0, y: 0 }
 let panStart = { x: 0, y: 0 }
+let scrollStart = { x: 0, y: 0 }
 let zoomStart = 1
 let pinchStartDistance = 0
 let pinchStartCenter = { x: 0, y: 0 }
 const BASE_MIN_ZOOM = 0.8
 const MAX_ZOOM = 2.2
 const DOUBLE_TAP_DELAY = 300
+const DRAG_LOCK_THRESHOLD = 8
 let lastTapAt = 0
+let dragAxis: 'x' | 'y' | null = null
 const tableRows = computed<SeatingRowItem[][]>(() => {
   const cols = 4
   const ordered = [...tables.value]
@@ -323,9 +338,17 @@ function getCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
 function onPointerDown(event: PointerEvent) {
   if (!seatingScrollRef.value) return
   if (event.pointerType === 'mouse' && event.button !== 0) return
-  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
-  seatingScrollRef.value.setPointerCapture(event.pointerId)
+  if (event.pointerType === 'touch' && isFullscreen.value && event.cancelable) event.preventDefault()
+  if (isFullscreen.value) {
+    seatingScrollRef.value.setPointerCapture(event.pointerId)
+  }
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  if (!isFullscreen.value) {
+    dragAxis = null
+    dragStart = { x: event.clientX, y: event.clientY }
+    scrollStart = { x: seatingScrollRef.value.scrollLeft, y: seatingScrollRef.value.scrollTop }
+    return
+  }
   if (pointers.size === 1) {
     dragStart = { x: event.clientX, y: event.clientY }
     panStart = { x: panX.value, y: panY.value }
@@ -342,8 +365,24 @@ function onPointerDown(event: PointerEvent) {
 
 function onPointerMove(event: PointerEvent) {
   if (!pointers.has(event.pointerId)) return
-  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  if (!isFullscreen.value) {
+    if (pointers.size !== 1) return
+    const point = Array.from(pointers.values())[0]
+    const dx = point.x - dragStart.x
+    const dy = point.y - dragStart.y
+    if (!dragAxis) {
+      if (Math.hypot(dx, dy) < DRAG_LOCK_THRESHOLD) return
+      dragAxis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'
+    }
+    if (dragAxis === 'y') return
+    if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+    const scrollEl = seatingScrollRef.value
+    if (!scrollEl) return
+    scrollEl.scrollLeft = scrollStart.x - dx
+    return
+  }
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   if (pointers.size === 1) {
     const point = Array.from(pointers.values())[0]
     const dx = point.x - dragStart.x
@@ -376,12 +415,16 @@ function onPointerMove(event: PointerEvent) {
 
 function onPointerUp(event: PointerEvent) {
   if (!seatingScrollRef.value) return
-  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
-  if (seatingScrollRef.value.hasPointerCapture(event.pointerId)) {
+  if (isFullscreen.value && event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+  if (isFullscreen.value && seatingScrollRef.value.hasPointerCapture(event.pointerId)) {
     seatingScrollRef.value.releasePointerCapture(event.pointerId)
   }
   if (!pointers.has(event.pointerId)) return
   pointers.delete(event.pointerId)
+  if (!isFullscreen.value) {
+    dragAxis = null
+    return
+  }
   if (pointers.size === 1) {
     const point = Array.from(pointers.values())[0]
     dragStart = { x: point.x, y: point.y }
@@ -393,16 +436,22 @@ function onPointerUp(event: PointerEvent) {
 }
 
 function onTouchStart(event: TouchEvent) {
-  if (event.cancelable) event.preventDefault()
   if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+  if (isFullscreen.value && event.cancelable) event.preventDefault()
   if (event.touches.length === 1) {
     const touch = event.touches[0]
     dragStart = { x: touch.clientX, y: touch.clientY }
+    dragAxis = null
+    if (!isFullscreen.value) {
+      scrollStart = { x: seatingScrollRef.value?.scrollLeft ?? 0, y: seatingScrollRef.value?.scrollTop ?? 0 }
+      return
+    }
     panStart = { x: panX.value, y: panY.value }
     zoomStart = zoom.value
     pinchStartDistance = 0
     return
   }
+  if (!isFullscreen.value) return
   if (event.touches.length === 2) {
     const [t1, t2] = Array.from(event.touches)
     pinchStartDistance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
@@ -413,8 +462,24 @@ function onTouchStart(event: TouchEvent) {
 }
 
 function onTouchMove(event: TouchEvent) {
-  if (event.cancelable) event.preventDefault()
   if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+  if (!isFullscreen.value) {
+    if (event.touches.length !== 1) return
+    const touch = event.touches[0]
+    const dx = touch.clientX - dragStart.x
+    const dy = touch.clientY - dragStart.y
+    if (!dragAxis) {
+      if (Math.hypot(dx, dy) < DRAG_LOCK_THRESHOLD) return
+      dragAxis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'
+    }
+    if (dragAxis === 'y') return
+    if (event.cancelable) event.preventDefault()
+    const scrollEl = seatingScrollRef.value
+    if (!scrollEl) return
+    scrollEl.scrollLeft = scrollStart.x - dx
+    return
+  }
+  if (event.cancelable) event.preventDefault()
   if (event.touches.length === 1) {
     const touch = event.touches[0]
     const dx = touch.clientX - dragStart.x
@@ -446,8 +511,12 @@ function onTouchMove(event: TouchEvent) {
 }
 
 function onTouchEnd(event: TouchEvent) {
-  if (event.cancelable) event.preventDefault()
   if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+  if (!isFullscreen.value) {
+    if (event.touches.length === 0) dragAxis = null
+    return
+  }
+  if (event.cancelable) event.preventDefault()
   if (event.touches.length === 1) {
     const touch = event.touches[0]
     dragStart = { x: touch.clientX, y: touch.clientY }
@@ -475,6 +544,7 @@ function isInsideSeating(event: Event) {
 }
 
 function handleDocumentTouchStart(event: TouchEvent) {
+  if (!isFullscreen.value) return
   if (!isInsideSeating(event)) return
   if (event.touches.length > 1 && event.cancelable) {
     event.preventDefault()
@@ -482,11 +552,13 @@ function handleDocumentTouchStart(event: TouchEvent) {
 }
 
 function handleDocumentTouchMove(event: TouchEvent) {
+  if (!isFullscreen.value) return
   if (!isInsideSeating(event)) return
   if (event.cancelable) event.preventDefault()
 }
 
 function handleDocumentTouchEnd(event: TouchEvent) {
+  if (!isFullscreen.value) return
   if (!isInsideSeating(event)) return
   const now = Date.now()
   if (now - lastTapAt < DOUBLE_TAP_DELAY && event.cancelable) {
@@ -496,12 +568,14 @@ function handleDocumentTouchEnd(event: TouchEvent) {
 }
 
 function handleDocumentGesture(event: Event) {
+  if (!isFullscreen.value) return
   if (!isInsideSeating(event)) return
   event.preventDefault()
 }
 
 function onWheel(event: WheelEvent) {
-  if (!seatingScrollRef.value) return
+  if (!seatingScrollRef.value || !isFullscreen.value) return
+  if (event.cancelable) event.preventDefault()
   if (event.ctrlKey) {
     const zoomFactor = Math.exp(-event.deltaY * 0.002)
     const minZoom = getMinZoom()
@@ -522,23 +596,92 @@ const handleResize = () => {
   applyTransform(panX.value, panY.value, zoom.value)
 }
 
-function togglePdf() {
-  isPdfOpen.value = !isPdfOpen.value
+function toggleFullscreen() {
+  if (hasPdf.value) {
+    isPdfOpen.value = !isPdfOpen.value
+    if (isPdfOpen.value) {
+      isFullscreen.value = false
+    }
+    return
+  }
+  isFullscreen.value = !isFullscreen.value
 }
 
-function closePdf() {
-  isPdfOpen.value = false
+const fullscreenButtonLabel = computed(() => {
+  if (hasPdf.value) return isPdfOpen.value ? 'PDFを閉じる' : 'PDFで見る'
+  return isFullscreen.value ? '閉じる' : '全画面で見る'
+})
+
+let bodyScrollLock: {
+  scrollY: number
+  styles: { overflow: string; position: string; top: string; width: string }
+} | null = null
+
+const lockBodyScroll = () => {
+  if (typeof window === 'undefined' || bodyScrollLock) return
+  const body = document.body
+  bodyScrollLock = {
+    scrollY: window.scrollY,
+    styles: {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width
+    }
+  }
+  body.style.overflow = 'hidden'
+  body.style.position = 'fixed'
+  body.style.top = `-${bodyScrollLock.scrollY}px`
+  body.style.width = '100%'
+}
+
+const unlockBodyScroll = () => {
+  if (typeof window === 'undefined' || !bodyScrollLock) return
+  const body = document.body
+  body.style.overflow = bodyScrollLock.styles.overflow
+  body.style.position = bodyScrollLock.styles.position
+  body.style.top = bodyScrollLock.styles.top
+  body.style.width = bodyScrollLock.styles.width
+  const { scrollY } = bodyScrollLock
+  bodyScrollLock = null
+  window.scrollTo(0, scrollY)
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && isPdfOpen.value) {
+  if (event.key !== 'Escape') return
+  if (isPdfOpen.value) {
     isPdfOpen.value = false
+    return
   }
+  if (isFullscreen.value) isFullscreen.value = false
 }
 
-watch(isPdfOpen, (value) => {
+watch(isFullscreen, async (value) => {
   if (!process.client) return
-  document.body.style.overflow = value ? 'hidden' : ''
+  if (value || isPdfOpen.value) {
+    lockBodyScroll()
+  } else {
+    unlockBodyScroll()
+  }
+  await nextTick()
+  if (value) {
+    applyTransform(panX.value, panY.value, zoom.value)
+    return
+  }
+  pointers.clear()
+  pinchStartDistance = 0
+  dragAxis = null
+  applyTransform(0, 0, 1)
+})
+
+watch(isPdfOpen, async (value) => {
+  if (!process.client) return
+  if (value || isFullscreen.value) {
+    lockBodyScroll()
+  } else {
+    unlockBodyScroll()
+  }
+  await nextTick()
 })
 
 onMounted(() => {
@@ -568,7 +711,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('gesturestart', handleDocumentGesture, true)
   document.removeEventListener('gesturechange', handleDocumentGesture, true)
   document.removeEventListener('gestureend', handleDocumentGesture, true)
-  if (process.client) document.body.style.overflow = ''
+  if (process.client) unlockBodyScroll()
 })
 
 useHead(() => {

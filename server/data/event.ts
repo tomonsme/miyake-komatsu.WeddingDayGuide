@@ -23,6 +23,7 @@ export type EventConfig = {
   venueName?: string
   venueRoom?: string
   monogramUrl?: string
+  seatingPdfUrl?: string
   seating?: SeatingPlan
   notes?: NoteItem[]
   photoShare?: PhotoShareInfo
@@ -36,6 +37,7 @@ export const eventConfig: EventConfig = {
   eventDateIso: '2026-02-07',
   venueName: 'ザ・リッツ・カールトン大阪',
   monogramUrl: '/shared/favicon.png',
+  seatingPdfUrl: '/seating.pdf',
   seating: {
     tables: [
       {
@@ -185,7 +187,7 @@ export const eventConfig: EventConfig = {
       '楽しいひとときをお過ごしください'
     ],
     date: '2026年2月7日',
-    signature: '三宅 智也・美穂乃'
+    signature: '三宅 智也　美穂乃'
   },
   storyboard: [
     { id: 'message', label: 'Message', title: 'メッセージ', subtitle: 'ご挨拶', image: '/pages/storyboard/message.jpg', to: '/message' },

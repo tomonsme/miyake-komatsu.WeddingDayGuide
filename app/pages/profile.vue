@@ -1,6 +1,6 @@
 <template>
-  <main class="min-h-screen bg-gradient-to-b from-ink to-midnight text-white">
-    <section class="mx-auto w-full max-w-screen-lg px-4 py-12 sm:px-6 sm:py-16 md:py-20">
+  <main class="bg-gradient-to-b from-ink to-midnight text-white">
+    <section class="mx-auto w-full max-w-screen-lg px-4 pt-12 pb-4 sm:px-6 sm:pt-16 sm:pb-6 md:pt-20">
       <div class="mb-6 flex items-start justify-between gap-4 sm:mb-8">
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-white/85">Profile</p>

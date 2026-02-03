@@ -1,6 +1,6 @@
 <template>
-  <main class="min-h-screen overflow-x-hidden bg-gradient-to-b from-ink to-midnight text-white">
-    <section class="mx-auto w-full max-w-screen-lg px-4 py-8 sm:px-6 sm:py-12 md:py-14">
+  <main class="overflow-x-hidden bg-gradient-to-b from-ink to-midnight text-white">
+    <section class="mx-auto w-full max-w-screen-lg px-4 pt-8 pb-4 sm:px-6 sm:pt-12 sm:pb-6 md:pt-14">
       <div class="mb-4 flex items-start justify-between gap-4 sm:mb-6">
         <div>
           <p class="text-xs uppercase tracking-[0.3em] text-white/85">Photos</p>
@@ -49,32 +49,30 @@
                     <span>Preview</span>
                     <span class="text-white/50">横にスワイプ</span>
                   </div>
-                  <div class="mt-1 share-preview-wrap">
-                    <div class="share-preview">
-                      <div
-                        v-for="(item, idx) in selectedItems"
-                        :key="`${item.file.name}-${item.file.size}-${idx}`"
-                        class="share-preview__item"
-                      >
-                        <img
-                          v-if="!item.isVideo"
-                          :src="item.url"
-                          :alt="item.file.name"
-                          class="share-preview__media"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <video
-                          v-else
-                          :src="item.url"
-                          class="share-preview__media"
-                          muted
-                          playsinline
-                          preload="metadata"
-                        ></video>
-                        <span v-if="item.isVideo" class="share-preview__badge">VIDEO</span>
-                        <button type="button" class="share-preview__remove" @click="removeFile(idx)" aria-label="削除">×</button>
-                      </div>
+                  <div ref="previewScroller" class="mt-1 share-preview-wrap">
+                    <div
+                      v-for="(item, idx) in selectedItems"
+                      :key="`${item.file.name}-${item.file.size}-${idx}`"
+                      class="share-preview__item"
+                    >
+                      <img
+                        v-if="!item.isVideo"
+                        :src="item.url"
+                        :alt="item.file.name"
+                        class="share-preview__media"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <video
+                        v-else
+                        :src="item.url"
+                        class="share-preview__media"
+                        muted
+                        playsinline
+                        preload="metadata"
+                      ></video>
+                      <span v-if="item.isVideo" class="share-preview__badge">VIDEO</span>
+                      <button type="button" class="share-preview__remove" @click="removeFile(idx)" aria-label="削除">×</button>
                     </div>
                   </div>
                   <div class="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-white/60">
@@ -132,17 +130,9 @@
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-xs uppercase tracking-[0.3em] text-white/80">Gallery</p>
-                  <p class="mt-1 text-[10px] text-white/60">写真 {{ galleryItems.length }}件</p>
+                  <p class="mt-1 text-[10px] text-white/60">写真 {{ galleryTotal }}件</p>
                 </div>
-                <button
-                  type="button"
-                  class="text-[10px] uppercase tracking-[0.28em] text-white/60 transition hover:text-white"
-                  :disabled="galleryState === 'loading'"
-                  :aria-busy="galleryState === 'loading'"
-                  @click="loadGallery"
-                >
-                  {{ galleryState === 'loading' ? '更新中...' : '更新' }}
-                </button>
+                <span class="text-[10px] uppercase tracking-[0.28em] text-white/45">自動更新</span>
               </div>
 
               <div v-if="galleryState === 'loading'" class="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-center text-xs text-white/70">
@@ -198,9 +188,9 @@
                 </p>
               </div>
               <div v-else class="mt-3 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-5 text-center text-xs text-white/60">
-                まだ写真がありません。送ってくれた写真がここに表示されます。
+                まだ写真がありません 送ってくれた写真がここに表示されます 
               </div>
-              <p class="mt-2 text-[10px] text-white/55">動画は保存されますが、スライドショーには表示されません。</p>
+              <p class="mt-2 text-[10px] text-white/55">動画は保存されますが スライドショーには表示されません </p>
             </div>
           </div>
 
@@ -223,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useEventData } from '../../composables/useEventData'
 
 const { displayCouple, photoShare } = useEventData()
@@ -237,6 +227,7 @@ const MAX_FILES = 20
 const NAME_KEY = 'wedding-photo-sender'
 const SLIDE_GROUP_LIMIT = 11
 const SLIDE_GROUP_SIZE = 4
+const AUTO_REFRESH_MS = 60000
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.mp4', '.mov']
 
 const senderName = ref('')
@@ -247,15 +238,19 @@ const uploadState = ref<'idle' | 'uploading' | 'done' | 'error'>('idle')
 const uploadError = ref('')
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const previewScroller = ref<HTMLDivElement | null>(null)
+let previewCleanup: (() => void) | null = null
 
 type GalleryItem = { key: string; url: string; lastModified: string }
 type PresignUpload = { key: string; url: string; headers?: Record<string, string> }
 type PresignResponse = { uploads: PresignUpload[] }
 const galleryItems = ref<GalleryItem[]>([])
+const galleryTotal = ref(0)
 const galleryState = ref<'idle' | 'loading' | 'error'>('idle')
 const galleryError = ref('')
 const currentSlide = ref(0)
 let slideshowTimer: ReturnType<typeof setInterval> | null = null
+let galleryRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 const fileCountLabel = computed(() => `選択 ${selectedItems.value.length}/${MAX_FILES}件`)
 const totalSize = computed(() => selectedItems.value.reduce((sum, item) => sum + item.file.size, 0))
@@ -280,6 +275,61 @@ const slideGroups = computed(() => {
 
 const openFilePicker = () => {
   fileInput.value?.click()
+}
+
+const setupPreviewScroller = () => {
+  if (previewCleanup) {
+    previewCleanup()
+    previewCleanup = null
+  }
+  const scroller = previewScroller.value
+  if (!scroller) return
+  const onWheel = (event: WheelEvent) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+    if (scroller.scrollWidth <= scroller.clientWidth) return
+    event.preventDefault()
+    scroller.scrollLeft += event.deltaY
+  }
+  let isDragging = false
+  let startX = 0
+  let startScrollLeft = 0
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0) return
+    if (event.pointerType !== 'mouse') return
+    const target = event.target as HTMLElement
+    if (target.closest('button')) return
+    isDragging = true
+    startX = event.clientX
+    startScrollLeft = scroller.scrollLeft
+    scroller.classList.add('is-dragging')
+    scroller.setPointerCapture(event.pointerId)
+  }
+  const onPointerMove = (event: PointerEvent) => {
+    if (!isDragging) return
+    const delta = event.clientX - startX
+    scroller.scrollLeft = startScrollLeft - delta
+  }
+  const stopDrag = (event: PointerEvent) => {
+    if (!isDragging) return
+    isDragging = false
+    scroller.classList.remove('is-dragging')
+    scroller.releasePointerCapture(event.pointerId)
+  }
+  scroller.addEventListener('wheel', onWheel, { passive: false })
+  scroller.addEventListener('pointerdown', onPointerDown)
+  scroller.addEventListener('pointermove', onPointerMove)
+  scroller.addEventListener('pointerup', stopDrag)
+  scroller.addEventListener('pointercancel', stopDrag)
+  scroller.addEventListener('pointerleave', stopDrag)
+  previewCleanup = () => {
+    scroller.removeEventListener('wheel', onWheel)
+    scroller.removeEventListener('pointerdown', onPointerDown)
+    scroller.removeEventListener('pointermove', onPointerMove)
+    scroller.removeEventListener('pointerup', stopDrag)
+    scroller.removeEventListener('pointercancel', stopDrag)
+    scroller.removeEventListener('pointerleave', stopDrag)
+    scroller.classList.remove('is-dragging')
+  }
 }
 
 const onFileChange = (event: Event) => {
@@ -341,6 +391,20 @@ const stopSlideshow = () => {
   slideshowTimer = null
 }
 
+const stopGalleryRefresh = () => {
+  if (galleryRefreshTimer) clearInterval(galleryRefreshTimer)
+  galleryRefreshTimer = null
+}
+
+const startGalleryRefresh = () => {
+  stopGalleryRefresh()
+  if (typeof window === 'undefined') return
+  galleryRefreshTimer = setInterval(() => {
+    if (document.visibilityState === 'hidden') return
+    void loadGallery({ silent: true })
+  }, AUTO_REFRESH_MS)
+}
+
 const startSlideshow = () => {
   stopSlideshow()
   if (slideGroups.value.length <= 1) return
@@ -369,24 +433,37 @@ const formatFetchError = (err: unknown) => {
   return { statusCode, statusMessage, message, detail }
 }
 
-const loadGallery = async () => {
-  galleryState.value = 'loading'
-  galleryError.value = ''
+const loadGallery = async (options: { silent?: boolean; fresh?: boolean } = {}) => {
+  const hasItems = galleryItems.value.length > 0
+  const showLoading = !options.silent || !hasItems
+  if (galleryState.value === 'loading') return
+  if (showLoading) galleryState.value = 'loading'
+  if (showLoading) galleryError.value = ''
   try {
-    const response = await $fetch<{ items: GalleryItem[] }>('/api/photos', {
+    const response = await $fetch<{ items: GalleryItem[]; total?: number }>('/api/photos', {
       method: 'GET',
-      query: { limit: 40 }
+      query: { limit: 40, order: 'latest', fresh: options.fresh ? 1 : undefined }
     })
     galleryItems.value = response.items || []
-    currentSlide.value = 0
+    galleryTotal.value = typeof response.total === 'number' ? response.total : galleryItems.value.length
+    if (showLoading) currentSlide.value = 0
     galleryState.value = 'idle'
-    startSlideshow()
+    galleryError.value = ''
   } catch (err) {
-    galleryState.value = 'error'
     const info = formatFetchError(err)
     console.error('gallery fetch failed', info, err)
-    galleryError.value = `写真の読み込みに失敗しました (${info.detail})`
+    if (showLoading) {
+      galleryState.value = 'error'
+      galleryError.value = `写真の読み込みに失敗しました (${info.detail})`
+    } else {
+      galleryState.value = 'idle'
+    }
   }
+}
+
+const onVisibilityChange = () => {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState === 'visible') void loadGallery({ silent: true, fresh: true })
 }
 
 const uploadFiles = async () => {
@@ -436,7 +513,7 @@ const uploadFiles = async () => {
 
     clearSelected()
     uploadState.value = 'done'
-    void loadGallery()
+    void loadGallery({ fresh: true })
     setTimeout(() => {
       if (uploadState.value === 'done') uploadState.value = 'idle'
     }, 2000)
@@ -453,11 +530,16 @@ onMounted(() => {
   const saved = window.localStorage.getItem(NAME_KEY)
   if (saved) senderName.value = saved
   void loadGallery()
+  startGalleryRefresh()
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   clearSelected()
   stopSlideshow()
+  stopGalleryRefresh()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  if (previewCleanup) previewCleanup()
 })
 
 watch(
@@ -470,6 +552,18 @@ watch(
     }
     if (currentSlide.value >= len) currentSlide.value = 0
     startSlideshow()
+  }
+)
+
+watch(
+  () => selectedItems.value.length,
+  async (len) => {
+    if (!len) {
+      if (previewCleanup) previewCleanup()
+      return
+    }
+    await nextTick()
+    setupPreviewScroller()
   }
 )
 
