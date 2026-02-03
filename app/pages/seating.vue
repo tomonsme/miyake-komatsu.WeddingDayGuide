@@ -58,7 +58,8 @@
         <div class="seating-controls sm:hidden">
           <div v-if="!isFullscreen" class="seating-hints">
             <span class="seating-pill">横向き推奨</span>
-            <span class="seating-pill">横にスクロール</span>
+            <span class="seating-pill">ピンチで拡大</span>
+            <span class="seating-pill">ドラッグで移動</span>
           </div>
           <button
             type="button"
@@ -221,10 +222,19 @@ let zoomStart = 1
 let pinchStartDistance = 0
 let pinchStartCenter = { x: 0, y: 0 }
 const BASE_MIN_ZOOM = 0.8
-const MAX_ZOOM = 2.2
+const MAX_ZOOM = 3.2
+const AUTO_FIT_PADDING = 12
+const SCROLL_LOCK_EPSILON = 0.02
 const DOUBLE_TAP_DELAY = 300
 let lastTapAt = 0
 let touchFallbackCleanup: (() => void) | null = null
+const isSmallScreen = ref(false)
+const shouldAutoFit = ref(true)
+let smallScreenQuery: MediaQueryList | null = null
+const updateSmallScreen = () => {
+  if (!smallScreenQuery) return
+  isSmallScreen.value = smallScreenQuery.matches
+}
 const tableRows = computed<SeatingRowItem[][]>(() => {
   const cols = 4
   const ordered = [...tables.value]
@@ -259,22 +269,23 @@ const setViewMode = (mode: 'chart' | 'pdf') => {
   }
 }
 
-watch(hasPdf, (value) => {
+watch([hasPdf, isSmallScreen], ([value]) => {
   if (!value) {
     viewMode.value = 'chart'
     userSelectedView.value = false
     return
   }
   if (!userSelectedView.value) {
-    viewMode.value = 'pdf'
+    viewMode.value = 'chart'
   }
 }, { immediate: true })
 
 watch(viewMode, async (value) => {
   if (!process.client) return
   if (value !== 'chart') return
+  shouldAutoFit.value = true
   await nextTick()
-  applyTransform(panX.value, panY.value, zoom.value)
+  autoFit()
 })
 
 function toGivenName(fullName?: string) {
@@ -297,10 +308,10 @@ const dateLine = computed(() => {
 function buildPdfViewUrl(url: string) {
   if (!url) return ''
   const [base, hash] = url.split('#')
-  if (!hash) return `${base}#page=1&zoom=page-width`
+  if (!hash) return `${base}#page=1&zoom=page-fit`
   const params = new URLSearchParams(hash)
   if (!params.has('page')) params.set('page', '1')
-  if (!params.has('view') && !params.has('zoom')) params.set('zoom', 'page-width')
+  if (!params.has('view') && !params.has('zoom')) params.set('zoom', 'page-fit')
   return `${base}#${params.toString()}`
 }
 
@@ -353,6 +364,34 @@ function getMinZoom() {
   const fitWidth = viewWidth / sheetWidth / baseScale
   const fitHeight = viewHeight / sheetHeight / baseScale
   return Math.min(BASE_MIN_ZOOM, fitWidth, fitHeight)
+}
+
+function getFitZoom() {
+  const scrollEl = seatingScrollRef.value
+  const sheetEl = seatingSheetRef.value
+  if (!scrollEl || !sheetEl) return 1
+  const baseScale = getBaseScale()
+  const { width: viewWidth, height: viewHeight } = getViewportMetrics()
+  const safeWidth = Math.max(1, viewWidth - AUTO_FIT_PADDING * 2)
+  const safeHeight = Math.max(1, viewHeight - AUTO_FIT_PADDING * 2)
+  const sheetWidth = sheetEl.offsetWidth || 1
+  const sheetHeight = sheetEl.offsetHeight || 1
+  const fitWidth = safeWidth / sheetWidth / baseScale
+  const fitHeight = safeHeight / sheetHeight / baseScale
+  const fitZoom = Math.min(1, fitWidth, fitHeight)
+  return clamp(fitZoom, getMinZoom(), MAX_ZOOM)
+}
+
+function autoFit() {
+  applyTransform(0, 0, getFitZoom())
+}
+
+function shouldLockTouchScroll(touchCount: number) {
+  if (isFullscreen.value) return true
+  if (touchCount > 1) return true
+  if (shouldAutoFit.value) return false
+  const fitZoom = getFitZoom()
+  return zoom.value > fitZoom + SCROLL_LOCK_EPSILON
 }
 
 function getViewportMetrics() {
@@ -458,8 +497,9 @@ function getCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
 
 function onPointerDown(event: PointerEvent) {
   if (!seatingScrollRef.value) return
+  if (event.pointerType === 'touch') return
   if (event.pointerType === 'mouse' && event.button !== 0) return
-  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+  shouldAutoFit.value = false
   seatingScrollRef.value.setPointerCapture(event.pointerId)
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
   if (pointers.size === 1) {
@@ -477,9 +517,9 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function onPointerMove(event: PointerEvent) {
+  if (event.pointerType === 'touch') return
   if (!pointers.has(event.pointerId)) return
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
-  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   if (pointers.size === 1) {
     const point = Array.from(pointers.values())[0]
     const dx = point.x - dragStart.x
@@ -510,7 +550,7 @@ function onPointerMove(event: PointerEvent) {
 
 function onPointerUp(event: PointerEvent) {
   if (!seatingScrollRef.value) return
-  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
+  if (event.pointerType === 'touch') return
   if (seatingScrollRef.value.hasPointerCapture(event.pointerId)) {
     seatingScrollRef.value.releasePointerCapture(event.pointerId)
   }
@@ -528,7 +568,9 @@ function onPointerUp(event: PointerEvent) {
 
 function onTouchStart(event: TouchEvent) {
   if (typeof window !== 'undefined' && 'PointerEvent' in window) return
-  if (event.cancelable) event.preventDefault()
+  const lockScroll = shouldLockTouchScroll(event.touches.length)
+  if (lockScroll && event.cancelable) event.preventDefault()
+  if (lockScroll) shouldAutoFit.value = false
   if (event.touches.length === 1) {
     const touch = event.touches[0]
     dragStart = { x: touch.clientX, y: touch.clientY }
@@ -537,7 +579,6 @@ function onTouchStart(event: TouchEvent) {
     pinchStartDistance = 0
     return
   }
-  if (!isFullscreen.value) return
   if (event.touches.length === 2) {
     const [t1, t2] = Array.from(event.touches)
     pinchStartDistance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
@@ -549,7 +590,9 @@ function onTouchStart(event: TouchEvent) {
 
 function onTouchMove(event: TouchEvent) {
   if (typeof window !== 'undefined' && 'PointerEvent' in window) return
-  if (event.cancelable) event.preventDefault()
+  const lockScroll = shouldLockTouchScroll(event.touches.length)
+  if (lockScroll && event.cancelable) event.preventDefault()
+  if (!lockScroll && event.touches.length === 1) return
   if (event.touches.length === 1) {
     const touch = event.touches[0]
     const dx = touch.clientX - dragStart.x
@@ -580,7 +623,7 @@ function onTouchMove(event: TouchEvent) {
 
 function onTouchEnd(event: TouchEvent) {
   if (typeof window !== 'undefined' && 'PointerEvent' in window) return
-  if (event.cancelable) event.preventDefault()
+  if (event.cancelable && shouldLockTouchScroll(event.touches.length)) event.preventDefault()
   if (event.touches.length === 1) {
     const touch = event.touches[0]
     dragStart = { x: touch.clientX, y: touch.clientY }
@@ -609,20 +652,22 @@ function isInsideSeating(event: Event) {
 
 function handleDocumentTouchStart(event: TouchEvent) {
   if (!isInsideSeating(event)) return
-  if (event.touches.length > 1 && event.cancelable) {
+  if (shouldLockTouchScroll(event.touches.length) && event.cancelable) {
     event.preventDefault()
   }
 }
 
 function handleDocumentTouchMove(event: TouchEvent) {
   if (!isInsideSeating(event)) return
-  if (event.cancelable) event.preventDefault()
+  if (shouldLockTouchScroll(event.touches.length) && event.cancelable) {
+    event.preventDefault()
+  }
 }
 
 function handleDocumentTouchEnd(event: TouchEvent) {
   if (!isInsideSeating(event)) return
   const now = Date.now()
-  if (now - lastTapAt < DOUBLE_TAP_DELAY && event.cancelable) {
+  if (now - lastTapAt < DOUBLE_TAP_DELAY && shouldLockTouchScroll(event.touches.length) && event.cancelable) {
     event.preventDefault()
   }
   lastTapAt = now
@@ -630,7 +675,7 @@ function handleDocumentTouchEnd(event: TouchEvent) {
 
 function handleDocumentGesture(event: Event) {
   if (!isInsideSeating(event)) return
-  event.preventDefault()
+  if (shouldLockTouchScroll(2)) event.preventDefault()
 }
 
 let documentTouchActive = false
@@ -658,7 +703,8 @@ const removeDocumentTouchListeners = () => {
 
 const setupTouchFallback = () => {
   if (typeof window === 'undefined') return
-  if ('PointerEvent' in window) return
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  if (!hasTouch) return
   const scrollEl = seatingScrollRef.value
   if (!scrollEl) return
   const options = { passive: false } as AddEventListenerOptions
@@ -678,6 +724,7 @@ function onWheel(event: WheelEvent) {
   if (event.ctrlKey) {
     if (!seatingScrollRef.value) return
     if (event.cancelable) event.preventDefault()
+    shouldAutoFit.value = false
     const zoomFactor = Math.exp(-event.deltaY * 0.002)
     const minZoom = getMinZoom()
     const nextZoom = clamp(zoom.value * zoomFactor, minZoom, MAX_ZOOM)
@@ -690,10 +737,15 @@ function onWheel(event: WheelEvent) {
   }
   if (!seatingScrollRef.value || !isFullscreen.value) return
   if (event.cancelable) event.preventDefault()
+  shouldAutoFit.value = false
   applyTransform(panX.value - event.deltaX, panY.value - event.deltaY, zoom.value)
 }
 
 const handleResize = () => {
+  if (shouldAutoFit.value) {
+    autoFit()
+    return
+  }
   applyTransform(panX.value, panY.value, zoom.value)
 }
 
@@ -753,17 +805,21 @@ watch(isFullscreen, async (value) => {
   } else {
     unlockBodyScroll()
   }
+  shouldAutoFit.value = true
   await nextTick()
   if (value) {
-    applyTransform(panX.value, panY.value, zoom.value)
+    autoFit()
     return
   }
   pointers.clear()
   pinchStartDistance = 0
-  applyTransform(0, 0, 1)
+  autoFit()
 })
 
 onMounted(() => {
+  smallScreenQuery = window.matchMedia('(max-width: 640px)')
+  updateSmallScreen()
+  smallScreenQuery.addEventListener('change', updateSmallScreen)
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', handleResize)
   seatingScrollRef.value?.addEventListener('gesturestart', preventGesture, { passive: false } as AddEventListenerOptions)
@@ -771,10 +827,13 @@ onMounted(() => {
   seatingScrollRef.value?.addEventListener('gestureend', preventGesture, { passive: false } as AddEventListenerOptions)
   setupTouchFallback()
   addDocumentTouchListeners()
-  requestAnimationFrame(() => applyTransform(panX.value, panY.value, zoom.value))
+  requestAnimationFrame(() => {
+    if (viewMode.value === 'chart') autoFit()
+  })
 })
 
 onBeforeUnmount(() => {
+  smallScreenQuery?.removeEventListener('change', updateSmallScreen)
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', handleResize)
   seatingScrollRef.value?.removeEventListener('gesturestart', preventGesture as EventListener)
