@@ -48,14 +48,14 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#BDA06A' }
       ],
       link: [
-        { rel: 'icon', type: 'image/png', sizes: 'any', href: withBase('/shared/favicon.png?v=4', appBaseURL) },
-        { rel: 'icon', type: 'image/x-icon', href: withBase('/shared/favicon.ico?v=4', appBaseURL) },
-        { rel: 'shortcut icon', href: withBase('/shared/favicon.ico?v=4', appBaseURL) },
-        { rel: 'icon', type: 'image/png', sizes: '32x32', href: withBase('/favicon-32.png?v=4', appBaseURL) },
-        { rel: 'icon', type: 'image/png', sizes: '192x192', href: withBase('/favicon-192.png?v=4', appBaseURL) },
-        { rel: 'icon', type: 'image/png', sizes: '512x512', href: withBase('/favicon-512.png?v=4', appBaseURL) },
-        { rel: 'icon', type: 'image/png', sizes: '1024x1024', href: withBase('/favicon.png?v=4', appBaseURL) },
-        { rel: 'apple-touch-icon', sizes: '180x180', href: withBase('/apple-touch-icon.png?v=4', appBaseURL) },
+        { rel: 'icon', type: 'image/png', sizes: 'any', href: withBase('/shared/favicon.png?v=5', appBaseURL) },
+        { rel: 'icon', type: 'image/x-icon', href: withBase('/shared/favicon.ico?v=5', appBaseURL) },
+        { rel: 'shortcut icon', href: withBase('/shared/favicon.ico?v=5', appBaseURL) },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: withBase('/shared/favicon.png?v=5', appBaseURL) },
+        { rel: 'icon', type: 'image/png', sizes: '192x192', href: withBase('/shared/favicon.png?v=5', appBaseURL) },
+        { rel: 'icon', type: 'image/png', sizes: '512x512', href: withBase('/shared/favicon.png?v=5', appBaseURL) },
+        { rel: 'icon', type: 'image/png', sizes: '1024x1024', href: withBase('/shared/favicon.png?v=5', appBaseURL) },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: withBase('/shared/favicon.png?v=5', appBaseURL) },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         // Preload stylesheet to speed up first render
