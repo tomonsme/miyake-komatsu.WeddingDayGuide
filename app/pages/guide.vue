@@ -478,14 +478,13 @@ const createEntryId = () => {
 const waitForLeaderboardReflection = async (
   game: GameId,
   entryId: string | null,
-  baselineUpdatedAt: number | null
+  baselineVersion: number
 ) => {
   const startedAt = Date.now()
+  const requiresEntry = Boolean(entryId)
   while (Date.now() - startedAt < REFLECTION_TIMEOUT_MS) {
     if (entryId && leaderboard.value[game].some((entry) => entry.id === entryId)) break
-    if (leaderboardUpdatedAt.value !== null) {
-      if (baselineUpdatedAt === null || leaderboardUpdatedAt.value > baselineUpdatedAt) break
-    }
+    if (!requiresEntry && leaderboardSnapshotVersion > baselineVersion) break
     await wait(REFLECTION_POLL_MS)
   }
   const elapsed = Date.now() - startedAt
@@ -887,6 +886,7 @@ const submitScore = async (
 ) => {
   const name = ensureNickname()
   if (!name) return
+  const baselineVersion = leaderboardSnapshotVersion
   setSubmitState(stateRef, noticeRef, timerRef, 'saving')
   const entryId = createEntryId()
   try {
@@ -910,7 +910,6 @@ const submitScore = async (
       }
     }
     if (!response) throw new Error('Missing submit response')
-    const baselineUpdatedAt = leaderboardUpdatedAt.value
     setSubmitState(stateRef, noticeRef, timerRef, 'reflecting')
     if (response.snapshot) {
       applyLeaderboardSnapshot(response.snapshot)
@@ -919,7 +918,10 @@ const submitScore = async (
     }
     const rank = response.rank
     const shouldTrackEntry = typeof rank === 'number' && rank > 0 && rank <= MAX_LEADERBOARD_ENTRIES
-    await waitForLeaderboardReflection(game, shouldTrackEntry ? response.entry.id : null, baselineUpdatedAt)
+    if (shouldTrackEntry && !leaderboard.value[game].some((entry) => entry.id === response.entry.id)) {
+      await refreshLeaderboardWithRetry()
+    }
+    await waitForLeaderboardReflection(game, shouldTrackEntry ? response.entry.id : null, baselineVersion)
     setSubmitState(stateRef, noticeRef, timerRef, 'done')
     void refreshLeaderboardWithRetry()
   } catch (err) {
