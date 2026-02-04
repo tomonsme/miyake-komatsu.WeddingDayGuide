@@ -15,29 +15,28 @@
           <button
             type="button"
             class="seating-fullscreen-btn"
-            :class="{ 'is-active': viewMode === 'pdf' }"
-            @click="setViewMode('pdf')"
-          >
-            PDFで見る
-          </button>
-          <button
-            type="button"
-            class="seating-fullscreen-btn"
             :class="{ 'is-active': viewMode === 'chart' }"
             @click="setViewMode('chart')"
           >
             席次表を見る
           </button>
+          <a
+            v-if="seatingPdfViewUrl"
+            :href="seatingPdfViewUrl"
+            target="_blank"
+            rel="noopener"
+            class="seating-fullscreen-btn seating-view-link"
+          >
+            PDFを開く
+          </a>
+          <button
+            type="button"
+            class="seating-fullscreen-btn"
+            @click="toggleFullscreen"
+          >
+            {{ fullscreenButtonLabel }}
+          </button>
         </div>
-        <a
-          v-if="seatingPdfViewUrl"
-          :href="seatingPdfViewUrl"
-          target="_blank"
-          rel="noopener"
-          class="seating-fullscreen-btn seating-view-link"
-        >
-          別タブで開く
-        </a>
       </div>
 
       <div v-if="hasPdf" v-show="viewMode === 'pdf'" class="seating-pdf-inline">
@@ -55,12 +54,7 @@
         :class="{ 'seating-shell--fullscreen': isFullscreen }"
         v-show="!hasPdf || viewMode === 'chart'"
       >
-        <div class="seating-controls sm:hidden">
-          <div v-if="!isFullscreen" class="seating-hints">
-            <span class="seating-pill">横向き推奨</span>
-            <span class="seating-pill">ピンチで拡大</span>
-            <span class="seating-pill">ドラッグで移動</span>
-          </div>
+        <div v-if="!hasPdf" class="seating-controls sm:hidden">
           <button
             type="button"
             class="seating-fullscreen-btn"
@@ -224,10 +218,6 @@ let pinchStartCenter = { x: 0, y: 0 }
 const BASE_MIN_ZOOM = 0.8
 const MAX_ZOOM = 3.2
 const AUTO_FIT_PADDING = 12
-const SCROLL_LOCK_EPSILON = 0.02
-const DOUBLE_TAP_DELAY = 300
-let lastTapAt = 0
-let touchFallbackCleanup: (() => void) | null = null
 const isSmallScreen = ref(false)
 const shouldAutoFit = ref(true)
 let smallScreenQuery: MediaQueryList | null = null
@@ -386,13 +376,6 @@ function autoFit() {
   applyTransform(0, 0, getFitZoom())
 }
 
-function shouldLockTouchScroll(touchCount: number) {
-  if (isFullscreen.value) return true
-  if (touchCount > 1) return true
-  if (shouldAutoFit.value) return false
-  const fitZoom = getFitZoom()
-  return zoom.value > fitZoom + SCROLL_LOCK_EPSILON
-}
 
 function getViewportMetrics() {
   const scrollEl = seatingScrollRef.value
@@ -435,7 +418,7 @@ function getTransformOrigin(sheetEl: HTMLElement) {
   return { x, y }
 }
 
-function getZoomPivot(clientX: number, clientY: number) {
+function getZoomPivot(clientX: number, clientY: number, panOffset = { x: panX.value, y: panY.value }) {
   const scrollEl = seatingScrollRef.value
   const sheetEl = seatingSheetRef.value
   if (!scrollEl || !sheetEl) return null
@@ -443,8 +426,8 @@ function getZoomPivot(clientX: number, clientY: number) {
   const view = getViewportMetrics()
   const origin = getTransformOrigin(sheetEl)
   return {
-    x: clientX - scrollRect.left - view.offsetX - origin.x,
-    y: clientY - scrollRect.top - view.offsetY - origin.y
+    x: clientX - scrollRect.left - view.offsetX - origin.x - panOffset.x,
+    y: clientY - scrollRect.top - view.offsetY - origin.y - panOffset.y
   }
 }
 
@@ -497,8 +480,9 @@ function getCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
 
 function onPointerDown(event: PointerEvent) {
   if (!seatingScrollRef.value) return
-  if (event.pointerType === 'touch') return
   if (event.pointerType === 'mouse' && event.button !== 0) return
+  if (event.pointerType === 'touch' && !isFullscreen.value) return
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   shouldAutoFit.value = false
   seatingScrollRef.value.setPointerCapture(event.pointerId)
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -517,9 +501,10 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (event.pointerType === 'touch') return
+  if (event.pointerType === 'touch' && !isFullscreen.value) return
   if (!pointers.has(event.pointerId)) return
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   if (pointers.size === 1) {
     const point = Array.from(pointers.values())[0]
     const dx = point.x - dragStart.x
@@ -536,7 +521,7 @@ function onPointerMove(event: PointerEvent) {
     const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
     const center = getCenter(p1, p2)
     const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
-    const pivot = getZoomPivot(center.x, center.y)
+    const pivot = getZoomPivot(center.x, center.y, panStart)
     if (!pivot) {
       applyTransform(panStart.x + deltaCenter.x, panStart.y + deltaCenter.y, nextZoom)
       return
@@ -550,7 +535,8 @@ function onPointerMove(event: PointerEvent) {
 
 function onPointerUp(event: PointerEvent) {
   if (!seatingScrollRef.value) return
-  if (event.pointerType === 'touch') return
+  if (event.pointerType === 'touch' && !isFullscreen.value) return
+  if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   if (seatingScrollRef.value.hasPointerCapture(event.pointerId)) {
     seatingScrollRef.value.releasePointerCapture(event.pointerId)
   }
@@ -566,158 +552,8 @@ function onPointerUp(event: PointerEvent) {
   }
 }
 
-function onTouchStart(event: TouchEvent) {
-  if (typeof window !== 'undefined' && 'PointerEvent' in window) return
-  const lockScroll = shouldLockTouchScroll(event.touches.length)
-  if (lockScroll && event.cancelable) event.preventDefault()
-  if (lockScroll) shouldAutoFit.value = false
-  if (event.touches.length === 1) {
-    const touch = event.touches[0]
-    dragStart = { x: touch.clientX, y: touch.clientY }
-    panStart = { x: panX.value, y: panY.value }
-    zoomStart = zoom.value
-    pinchStartDistance = 0
-    return
-  }
-  if (event.touches.length === 2) {
-    const [t1, t2] = Array.from(event.touches)
-    pinchStartDistance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
-    pinchStartCenter = getCenter({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
-    panStart = { x: panX.value, y: panY.value }
-    zoomStart = zoom.value
-  }
-}
-
-function onTouchMove(event: TouchEvent) {
-  if (typeof window !== 'undefined' && 'PointerEvent' in window) return
-  const lockScroll = shouldLockTouchScroll(event.touches.length)
-  if (lockScroll && event.cancelable) event.preventDefault()
-  if (!lockScroll && event.touches.length === 1) return
-  if (event.touches.length === 1) {
-    const touch = event.touches[0]
-    const dx = touch.clientX - dragStart.x
-    const dy = touch.clientY - dragStart.y
-    applyTransform(panStart.x + dx, panStart.y + dy, zoom.value)
-    return
-  }
-  if (event.touches.length === 2) {
-    const [t1, t2] = Array.from(event.touches)
-    if (!pinchStartDistance) return
-    const distance = getDistance({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
-    const rawZoom = zoomStart * (distance / pinchStartDistance)
-    const minZoom = getMinZoom()
-    const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
-    const center = getCenter({ x: t1.clientX, y: t1.clientY }, { x: t2.clientX, y: t2.clientY })
-    const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
-    const pivot = getZoomPivot(center.x, center.y)
-    if (!pivot) {
-      applyTransform(panStart.x + deltaCenter.x, panStart.y + deltaCenter.y, nextZoom)
-      return
-    }
-    const scaleChange = nextZoom / zoomStart
-    const nextX = panStart.x + deltaCenter.x + pivot.x * (1 - scaleChange)
-    const nextY = panStart.y + deltaCenter.y + pivot.y * (1 - scaleChange)
-    applyTransform(nextX, nextY, nextZoom)
-  }
-}
-
-function onTouchEnd(event: TouchEvent) {
-  if (typeof window !== 'undefined' && 'PointerEvent' in window) return
-  if (event.cancelable && shouldLockTouchScroll(event.touches.length)) event.preventDefault()
-  if (event.touches.length === 1) {
-    const touch = event.touches[0]
-    dragStart = { x: touch.clientX, y: touch.clientY }
-    panStart = { x: panX.value, y: panY.value }
-    zoomStart = zoom.value
-    return
-  }
-  if (event.touches.length === 0) {
-    pinchStartDistance = 0
-  }
-}
-
 function preventGesture(event: Event) {
   event.preventDefault()
-}
-
-function isInsideSeating(event: Event) {
-  const root = seatingScrollRef.value
-  if (!root) return false
-  if (event.composedPath) {
-    return event.composedPath().includes(root)
-  }
-  const target = event.target as Node | null
-  return target ? root.contains(target) : false
-}
-
-function handleDocumentTouchStart(event: TouchEvent) {
-  if (!isInsideSeating(event)) return
-  if (shouldLockTouchScroll(event.touches.length) && event.cancelable) {
-    event.preventDefault()
-  }
-}
-
-function handleDocumentTouchMove(event: TouchEvent) {
-  if (!isInsideSeating(event)) return
-  if (shouldLockTouchScroll(event.touches.length) && event.cancelable) {
-    event.preventDefault()
-  }
-}
-
-function handleDocumentTouchEnd(event: TouchEvent) {
-  if (!isInsideSeating(event)) return
-  const now = Date.now()
-  if (now - lastTapAt < DOUBLE_TAP_DELAY && shouldLockTouchScroll(event.touches.length) && event.cancelable) {
-    event.preventDefault()
-  }
-  lastTapAt = now
-}
-
-function handleDocumentGesture(event: Event) {
-  if (!isInsideSeating(event)) return
-  if (shouldLockTouchScroll(2)) event.preventDefault()
-}
-
-let documentTouchActive = false
-const addDocumentTouchListeners = () => {
-  if (documentTouchActive) return
-  documentTouchActive = true
-  document.addEventListener('touchstart', handleDocumentTouchStart, { passive: false, capture: true })
-  document.addEventListener('touchmove', handleDocumentTouchMove, { passive: false, capture: true })
-  document.addEventListener('touchend', handleDocumentTouchEnd, { passive: false, capture: true })
-  document.addEventListener('gesturestart', handleDocumentGesture, { passive: false, capture: true })
-  document.addEventListener('gesturechange', handleDocumentGesture, { passive: false, capture: true })
-  document.addEventListener('gestureend', handleDocumentGesture, { passive: false, capture: true })
-}
-
-const removeDocumentTouchListeners = () => {
-  if (!documentTouchActive) return
-  documentTouchActive = false
-  document.removeEventListener('touchstart', handleDocumentTouchStart, true)
-  document.removeEventListener('touchmove', handleDocumentTouchMove, true)
-  document.removeEventListener('touchend', handleDocumentTouchEnd, true)
-  document.removeEventListener('gesturestart', handleDocumentGesture, true)
-  document.removeEventListener('gesturechange', handleDocumentGesture, true)
-  document.removeEventListener('gestureend', handleDocumentGesture, true)
-}
-
-const setupTouchFallback = () => {
-  if (typeof window === 'undefined') return
-  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-  if (!hasTouch) return
-  const scrollEl = seatingScrollRef.value
-  if (!scrollEl) return
-  const options = { passive: false } as AddEventListenerOptions
-  scrollEl.addEventListener('touchstart', onTouchStart, options)
-  scrollEl.addEventListener('touchmove', onTouchMove, options)
-  scrollEl.addEventListener('touchend', onTouchEnd, options)
-  scrollEl.addEventListener('touchcancel', onTouchEnd, options)
-  touchFallbackCleanup = () => {
-    scrollEl.removeEventListener('touchstart', onTouchStart)
-    scrollEl.removeEventListener('touchmove', onTouchMove)
-    scrollEl.removeEventListener('touchend', onTouchEnd)
-    scrollEl.removeEventListener('touchcancel', onTouchEnd)
-  }
 }
 
 function onWheel(event: WheelEvent) {
@@ -825,8 +661,6 @@ onMounted(() => {
   seatingScrollRef.value?.addEventListener('gesturestart', preventGesture, { passive: false } as AddEventListenerOptions)
   seatingScrollRef.value?.addEventListener('gesturechange', preventGesture, { passive: false } as AddEventListenerOptions)
   seatingScrollRef.value?.addEventListener('gestureend', preventGesture, { passive: false } as AddEventListenerOptions)
-  setupTouchFallback()
-  addDocumentTouchListeners()
   requestAnimationFrame(() => {
     if (viewMode.value === 'chart') autoFit()
   })
@@ -839,8 +673,6 @@ onBeforeUnmount(() => {
   seatingScrollRef.value?.removeEventListener('gesturestart', preventGesture as EventListener)
   seatingScrollRef.value?.removeEventListener('gesturechange', preventGesture as EventListener)
   seatingScrollRef.value?.removeEventListener('gestureend', preventGesture as EventListener)
-  touchFallbackCleanup?.()
-  removeDocumentTouchListeners()
   if (process.client) unlockBodyScroll()
 })
 

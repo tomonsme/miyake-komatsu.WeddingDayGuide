@@ -1426,6 +1426,7 @@
     --seating-zoom: 1;
     --seating-offset-x: 0px;
     --seating-offset-y: 0px;
+    height: clamp(320px, 58vh, 520px);
   }
   .seating-shell--fullscreen {
     position: fixed;
@@ -1485,22 +1486,21 @@
   }
   .seating-view-toggle {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.6rem;
     margin-bottom: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .seating-view-toggle__group {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.5rem;
   }
   .seating-view-link {
-    margin-left: auto;
-  }
-  @media (max-width: 640px) {
-    .seating-view-link { margin-left: 0; }
+    margin-left: 0;
   }
   .seating-pdf-inline {
     background: #0b0f17;
@@ -1523,6 +1523,7 @@
     align-items: flex-start;
     overflow-x: auto;
     overflow-y: hidden;
+    height: 100%;
     padding-bottom: 0.25rem;
     touch-action: pan-y;
     user-select: none;
@@ -1531,8 +1532,13 @@
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .seating-scroll::-webkit-scrollbar { display: none; }
   @media (max-width: 640px) {
+    .seating-shell {
+      height: clamp(280px, 52vh, 460px);
+    }
     .seating-shell:not(.seating-shell--fullscreen) {
       --seating-scale: 1;
     }
@@ -1787,6 +1793,31 @@
     line-break: strict;
   }
   .seating-seat-suffix { font-size: 0.78rem; margin-left: 0.35rem; color: rgba(43,42,40,.6); }
+
+  @media (max-width: 640px) {
+    .seating-sheet {
+      padding: 6px 8px 8px;
+      border-radius: 20px;
+    }
+    .seating-sheet::before {
+      inset: 4px;
+      border-radius: 14px;
+    }
+    .seating-header { gap: 8px; }
+    .seating-couple { margin-bottom: 0.45rem; gap: 0.9rem; font-size: 0.82rem; }
+    .seating-grid { margin-top: 0.2rem; }
+    .seating-row + .seating-row { margin-top: 0.6rem; }
+    .seating-table {
+      min-height: 220px;
+      padding: 0.45rem 0.4rem 0.4rem;
+    }
+    .seating-table__meta { padding-bottom: 0.3rem; margin-bottom: 0.25rem; }
+    .seating-diagram { height: 140px; }
+    .seating-diagram--dense { height: 130px; }
+    .seating-diagram--snug { height: 124px; }
+    .seating-diagram--compact { height: 118px; }
+    .seating-table__circle { width: 44px; height: 44px; }
+  }
 
     /* Decorative divider under section headings */
     .divider { /* thin gold rule under headings */
