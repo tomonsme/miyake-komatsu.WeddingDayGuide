@@ -126,7 +126,6 @@
           </div>
           <p class="mt-1 text-sm text-white/85">会場内でリアルタイム更新</p>
           <p class="mt-0.5 text-[10px] text-white/50">※上位3件のみ表示</p>
-          <p v-if="lastUpdatedLabel" class="mt-0.5 text-xs text-white/55">更新: {{ lastUpdatedLabel }}</p>
           <p v-if="leaderboardError" class="mt-1 text-xs text-rose-200">{{ leaderboardError }}</p>
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
@@ -499,14 +498,6 @@ const liveIndicator = computed(() => {
   if (liveConnected.value) return true
   if (!leaderboardUpdatedAt.value) return false
   return nowTick.value - leaderboardUpdatedAt.value < STREAM_STALE_MS
-})
-const lastUpdatedLabel = computed(() => {
-  if (!leaderboardUpdatedAt.value) return ''
-  return new Date(leaderboardUpdatedAt.value).toLocaleTimeString('ja-JP', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
 })
 const leaderboardReflecting = computed(
   () =>
