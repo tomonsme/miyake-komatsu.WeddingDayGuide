@@ -46,7 +46,16 @@
         :class="{ 'seating-shell--fullscreen': isFullscreen }"
         v-show="!hasPdf || viewMode === 'chart'"
       >
-        <div v-if="!hasPdf" class="seating-controls sm:hidden">
+        <div v-if="isFullscreen" class="seating-controls seating-controls--fullscreen">
+          <button
+            type="button"
+            class="seating-fullscreen-btn is-active"
+            @click="toggleFullscreen"
+          >
+            {{ fullscreenButtonLabel }}
+          </button>
+        </div>
+        <div v-if="!hasPdf && !isFullscreen" class="seating-controls sm:hidden">
           <button
             type="button"
             class="seating-fullscreen-btn"

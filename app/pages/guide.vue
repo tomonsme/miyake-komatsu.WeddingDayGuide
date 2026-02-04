@@ -470,6 +470,7 @@ const applyLeaderboardSnapshot = (payload: unknown) => {
   leaderboardUpdatedAt.value = Date.now()
   leaderboardError.value = ''
   liveConnected.value = true
+  leaderboardSnapshotVersion += 1
   return true
 }
 
@@ -524,10 +525,12 @@ const leaderboardReflecting = computed(
 )
 
 let refreshInFlight = false
+let leaderboardSnapshotVersion = 0
 
 const refreshLeaderboard = async () => {
   if (refreshInFlight) return false
   refreshInFlight = true
+  const baselineVersion = leaderboardSnapshotVersion
   if (!leaderboardUpdatedAt.value) {
     leaderboardError.value = '取得中です...'
   } else {
@@ -535,6 +538,9 @@ const refreshLeaderboard = async () => {
   }
   try {
     const data = await $fetch<LeaderboardSnapshot>('/api/leaderboard', { cache: 'no-store' })
+    if (baselineVersion !== leaderboardSnapshotVersion) {
+      return true
+    }
     if (!applyLeaderboardSnapshot(data)) {
       if (!leaderboardUpdatedAt.value) {
         leaderboardError.value = '取得中です...'

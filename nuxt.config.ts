@@ -18,11 +18,7 @@ export default defineNuxtConfig({
     s3PublicBaseUrl: '',
     s3AccessKeyId: '',
     s3SecretAccessKey: '',
-    s3SessionToken: '',
-    inviteAccessKey: '',
-    public: {
-      inviteAccessEnabled: Boolean(process.env.INVITE_ACCESS_KEY)
-    }
+    s3SessionToken: ''
   },
   // components path stays relative to project root
   components: [{ path: './components', pathPrefix: false }],

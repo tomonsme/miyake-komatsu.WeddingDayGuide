@@ -72,14 +72,6 @@ export function useEventData() {
     try {
       return await $fetch<EventConfig>('/api/event', { headers })
     } catch (err: any) {
-      if (process.client && err?.statusCode === 401) {
-        const inviteCookie = useCookie<string | null>('invite_key')
-        inviteCookie.value = null
-        const route = useRoute()
-        if (route.path !== '/access') {
-          navigateTo(`/access?to=${encodeURIComponent(route.fullPath)}`)
-        }
-      }
       return null
     }
   })
