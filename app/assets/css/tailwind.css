@@ -930,6 +930,19 @@
     background: #ffffff;
     box-shadow: 0 0 0 2px rgba(0,0,0,.4);
   }
+  .game-arcade .game-reset-trigger {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+  }
+  .game-arcade .game-reset-trigger:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+  }
   .game-spinner {
     --spinner-size: 16px;
     --spinner-dot: 4px;

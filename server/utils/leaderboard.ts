@@ -394,6 +394,37 @@ export const getLeaderboardSnapshotFresh = async () => {
   return buildSnapshot()
 }
 
+export const clearLeaderboard = async () => {
+  return queueWrite(async () => {
+    const s3Config = getS3ConfigSafe()
+    if (s3Config) {
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < STORAGE_WRITE_ATTEMPTS; attempt += 1) {
+        try {
+          const { etag } = await loadStoredEntriesFromS3(s3Config)
+          await writeEntriesToS3(s3Config, [], etag)
+          updateStateEntries([])
+          return
+        } catch (err) {
+          lastError = err
+          if (isPreconditionFailed(err)) continue
+          throw err
+        }
+      }
+      try {
+        await writeEntriesToS3(s3Config, [], null)
+        updateStateEntries([])
+        return
+      } catch (err) {
+        throw (lastError ?? err) as Error
+      }
+    }
+
+    updateStateEntries([])
+    await persistEntriesToDisk([])
+  })
+}
+
 export const subscribe = (listener: Listener) => {
   state.listeners.add(listener)
   if (state.listeners.size === 1) startSyncLoop()

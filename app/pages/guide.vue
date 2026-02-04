@@ -103,10 +103,20 @@
         <div class="luxe-card__inner dq-panel__inner" aria-live="polite">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <p class="dq-label">ランキング</p>
-              <span v-if="leaderboardReflecting" class="inline-flex items-center gap-1 text-[10px] text-white/60">
+              <button
+                type="button"
+                class="dq-label game-reset-trigger"
+                aria-label="ランキングをリセット"
+                @pointerdown.prevent="startLeaderboardResetPress"
+                @pointerup="cancelLeaderboardResetPress"
+                @pointerleave="cancelLeaderboardResetPress"
+                @pointercancel="cancelLeaderboardResetPress"
+                @contextmenu.prevent
+              >
+                ランキング
+              </button>
+              <span v-if="leaderboardReflecting" class="inline-flex items-center">
                 <span class="game-spinner game-spinner--sm" aria-hidden="true"></span>
-                反映中...
               </span>
             </div>
             <span class="live-badge" :class="liveIndicator ? '' : 'text-white/50 border-white/20'">
@@ -239,16 +249,7 @@
                   <span v-if="tapBest > 0" class="score-pill">Best {{ tapBest }}</span>
                   <span v-if="tapActive" class="score-pill">Now {{ tapScore }}</span>
                 </div>
-                <p v-if="tapSubmitState === 'reflecting'" class="mt-1 text-xs text-white/70">
-                  <span class="inline-flex items-center gap-2">
-                    <span class="game-spinner game-spinner--sm" aria-hidden="true"></span>
-                    {{ tapSubmitNotice || 'ランキング反映中...' }}
-                  </span>
-                </p>
-                <p v-else-if="tapSubmitState === 'done'" class="mt-1 text-xs text-gold">
-                  {{ tapSubmitNotice || '送信しました' }}
-                </p>
-                <p v-else-if="tapSubmitState === 'error'" class="mt-1 text-xs text-rose-200">
+                <p v-if="tapSubmitState === 'error'" class="mt-1 text-xs text-rose-200">
                   {{ tapSubmitNotice || '送信できませんでした' }}
                 </p>
               </section>
@@ -329,16 +330,7 @@
                   <span v-if="stopBestDelta !== null" class="score-pill">Best Δ {{ formatDelta(stopBestDelta) }}</span>
                   <span v-if="stopResultMs !== null" class="score-pill">今回 {{ formatSeconds(stopResultMs) }}s</span>
                 </div>
-                <p v-if="stopSubmitState === 'reflecting'" class="mt-2 text-xs text-white/70">
-                  <span class="inline-flex items-center gap-2">
-                    <span class="game-spinner game-spinner--sm" aria-hidden="true"></span>
-                    {{ stopSubmitNotice || 'ランキング反映中...' }}
-                  </span>
-                </p>
-                <p v-else-if="stopSubmitState === 'done'" class="mt-2 text-xs text-gold">
-                  {{ stopSubmitNotice || '送信しました' }}
-                </p>
-                <p v-else-if="stopSubmitState === 'error'" class="mt-2 text-xs text-rose-200">
+                <p v-if="stopSubmitState === 'error'" class="mt-2 text-xs text-rose-200">
                   {{ stopSubmitNotice || '送信できませんでした' }}
                 </p>
               </section>
@@ -432,8 +424,9 @@ const POLL_SLOW_MS = 6000
 const STREAM_STALE_MS = 30000
 const RECONNECT_MAX_DELAY_MS = 20000
 const REFLECTION_POLL_MS = 200
-const REFLECTION_MIN_MS = 600
+const REFLECTION_MIN_MS = 1200
 const REFLECTION_TIMEOUT_MS = 8000
+const RESET_HOLD_MS = 1600
 
 const sortTapEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
   if (b.score !== a.score) return b.score - a.score
@@ -526,6 +519,8 @@ const leaderboardReflecting = computed(
 
 let refreshInFlight = false
 let leaderboardSnapshotVersion = 0
+const resetInFlight = ref(false)
+const resetPressTimer = { value: null as ReturnType<typeof setTimeout> | null }
 
 const refreshLeaderboard = async () => {
   if (refreshInFlight) return false
@@ -557,6 +552,36 @@ const refreshLeaderboard = async () => {
   } finally {
     refreshInFlight = false
   }
+}
+
+const resetLeaderboard = async () => {
+  if (resetInFlight.value) return
+  resetInFlight.value = true
+  try {
+    await $fetch('/api/leaderboard/reset', { method: 'POST' })
+    await refreshLeaderboardWithRetry()
+  } catch (err) {
+    leaderboardError.value = 'リセットできませんでした'
+    setTimeout(() => {
+      leaderboardError.value = ''
+    }, 1800)
+  } finally {
+    resetInFlight.value = false
+  }
+}
+
+const startLeaderboardResetPress = () => {
+  if (resetPressTimer.value || resetInFlight.value) return
+  resetPressTimer.value = setTimeout(() => {
+    resetPressTimer.value = null
+    void resetLeaderboard()
+  }, RESET_HOLD_MS)
+}
+
+const cancelLeaderboardResetPress = () => {
+  if (!resetPressTimer.value) return
+  clearTimeout(resetPressTimer.value)
+  resetPressTimer.value = null
 }
 
 const refreshLeaderboardWithRetry = async (attempts = 3) => {
@@ -819,13 +844,13 @@ const tapSubmitReady = computed(() => tapCanSubmit.value && hasNickname.value &&
 const stopSubmitReady = computed(() => stopCanSubmit.value && hasNickname.value && !stopSubmitBusy.value)
 const tapSubmitLabel = computed(() => {
   if (tapSubmitState.value === 'saving') return '送信中...'
-  if (tapSubmitState.value === 'reflecting') return '反映中...'
+  if (tapSubmitState.value === 'reflecting') return '送信中...'
   if (!hasNickname.value) return 'ニックネームを入力'
   return 'ランキングに送る'
 })
 const stopSubmitLabel = computed(() => {
   if (stopSubmitState.value === 'saving') return '送信中...'
-  if (stopSubmitState.value === 'reflecting') return '反映中...'
+  if (stopSubmitState.value === 'reflecting') return '送信中...'
   if (!hasNickname.value) return 'ニックネームを入力'
   return 'ランキングに送る'
 })
@@ -886,7 +911,7 @@ const submitScore = async (
     }
     if (!response) throw new Error('Missing submit response')
     const baselineUpdatedAt = leaderboardUpdatedAt.value
-    setSubmitState(stateRef, noticeRef, timerRef, 'reflecting', 'ランキング反映中...')
+    setSubmitState(stateRef, noticeRef, timerRef, 'reflecting')
     if (response.snapshot) {
       applyLeaderboardSnapshot(response.snapshot)
     } else {
@@ -895,10 +920,7 @@ const submitScore = async (
     const rank = response.rank
     const shouldTrackEntry = typeof rank === 'number' && rank > 0 && rank <= MAX_LEADERBOARD_ENTRIES
     await waitForLeaderboardReflection(game, shouldTrackEntry ? response.entry.id : null, baselineUpdatedAt)
-    const message = rank
-      ? `ランキング${rank}位に入りました`
-      : '送信しました（上位3位に入ると表示されます）'
-    setSubmitState(stateRef, noticeRef, timerRef, 'done', message)
+    setSubmitState(stateRef, noticeRef, timerRef, 'done')
     void refreshLeaderboardWithRetry()
   } catch (err) {
     setSubmitState(stateRef, noticeRef, timerRef, 'error', '送信できませんでした')
@@ -969,6 +991,7 @@ onBeforeUnmount(() => {
   }
   stopLeaderboardPolling()
   if (reconnectTimer) clearTimeout(reconnectTimer)
+  cancelLeaderboardResetPress()
   if (typeof window !== 'undefined') {
     if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler)
     if (onlineHandler) window.removeEventListener('online', onlineHandler)
