@@ -102,7 +102,13 @@
       <div class="luxe-card dq-panel dq-panel--dialog">
         <div class="luxe-card__inner dq-panel__inner" aria-live="polite">
           <div class="flex items-center justify-between">
-            <p class="dq-label">ランキング</p>
+            <div class="flex items-center gap-2">
+              <p class="dq-label">ランキング</p>
+              <span v-if="leaderboardReflecting" class="inline-flex items-center gap-1 text-[10px] text-white/60">
+                <span class="game-spinner game-spinner--sm" aria-hidden="true"></span>
+                反映中...
+              </span>
+            </div>
             <span class="live-badge" :class="liveIndicator ? '' : 'text-white/50 border-white/20'">
               <span class="live-dot" :class="liveIndicator ? 'is-on' : 'is-off'"></span>
               {{ liveIndicator ? 'LIVE' : 'OFFLINE' }}
@@ -217,9 +223,15 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     :disabled="!tapSubmitReady"
+                    :aria-busy="tapSubmitState === 'saving' || tapSubmitState === 'reflecting'"
                     @click="submitTapScore"
                   >
-                    {{ tapSubmitLabel }}
+                    <span
+                      v-if="tapSubmitState === 'saving' || tapSubmitState === 'reflecting'"
+                      class="game-spinner game-spinner--sm"
+                      aria-hidden="true"
+                    ></span>
+                    <span>{{ tapSubmitLabel }}</span>
                   </button>
                 </div>
                 <p class="mt-2 text-xs text-white/70" aria-live="polite">{{ tapMessage }}</p>
@@ -227,7 +239,13 @@
                   <span v-if="tapBest > 0" class="score-pill">Best {{ tapBest }}</span>
                   <span v-if="tapActive" class="score-pill">Now {{ tapScore }}</span>
                 </div>
-                <p v-if="tapSubmitState === 'done'" class="mt-1 text-xs text-gold">
+                <p v-if="tapSubmitState === 'reflecting'" class="mt-1 text-xs text-white/70">
+                  <span class="inline-flex items-center gap-2">
+                    <span class="game-spinner game-spinner--sm" aria-hidden="true"></span>
+                    {{ tapSubmitNotice || 'ランキング反映中...' }}
+                  </span>
+                </p>
+                <p v-else-if="tapSubmitState === 'done'" class="mt-1 text-xs text-gold">
                   {{ tapSubmitNotice || '送信しました' }}
                 </p>
                 <p v-else-if="tapSubmitState === 'error'" class="mt-1 text-xs text-rose-200">
@@ -296,16 +314,28 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     :disabled="!stopSubmitReady"
+                    :aria-busy="stopSubmitState === 'saving' || stopSubmitState === 'reflecting'"
                     @click="submitStopScore"
                   >
-                    {{ stopSubmitLabel }}
+                    <span
+                      v-if="stopSubmitState === 'saving' || stopSubmitState === 'reflecting'"
+                      class="game-spinner game-spinner--sm"
+                      aria-hidden="true"
+                    ></span>
+                    <span>{{ stopSubmitLabel }}</span>
                   </button>
                 </div>
                 <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/70">
                   <span v-if="stopBestDelta !== null" class="score-pill">Best Δ {{ formatDelta(stopBestDelta) }}</span>
                   <span v-if="stopResultMs !== null" class="score-pill">今回 {{ formatSeconds(stopResultMs) }}s</span>
                 </div>
-                <p v-if="stopSubmitState === 'done'" class="mt-2 text-xs text-gold">
+                <p v-if="stopSubmitState === 'reflecting'" class="mt-2 text-xs text-white/70">
+                  <span class="inline-flex items-center gap-2">
+                    <span class="game-spinner game-spinner--sm" aria-hidden="true"></span>
+                    {{ stopSubmitNotice || 'ランキング反映中...' }}
+                  </span>
+                </p>
+                <p v-else-if="stopSubmitState === 'done'" class="mt-2 text-xs text-gold">
                   {{ stopSubmitNotice || '送信しました' }}
                 </p>
                 <p v-else-if="stopSubmitState === 'error'" class="mt-2 text-xs text-rose-200">
@@ -344,6 +374,8 @@ type LeaderboardSubmitResponse = {
   snapshot: LeaderboardSnapshot
   rank: number | null
 }
+
+type SubmitState = 'idle' | 'saving' | 'reflecting' | 'done' | 'error'
 
 const { displayCouple } = useEventData()
 
@@ -399,6 +431,9 @@ const POLL_FAST_MS = 2000
 const POLL_SLOW_MS = 6000
 const STREAM_STALE_MS = 30000
 const RECONNECT_MAX_DELAY_MS = 20000
+const REFLECTION_POLL_MS = 200
+const REFLECTION_MIN_MS = 600
+const REFLECTION_TIMEOUT_MS = 8000
 
 const sortTapEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
   if (b.score !== a.score) return b.score - a.score
@@ -446,6 +481,25 @@ const createEntryId = () => {
   return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+const waitForLeaderboardReflection = async (
+  game: GameId,
+  entryId: string | null,
+  baselineUpdatedAt: number | null
+) => {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < REFLECTION_TIMEOUT_MS) {
+    if (entryId && leaderboard.value[game].some((entry) => entry.id === entryId)) break
+    if (leaderboardUpdatedAt.value !== null) {
+      if (baselineUpdatedAt === null || leaderboardUpdatedAt.value > baselineUpdatedAt) break
+    }
+    await wait(REFLECTION_POLL_MS)
+  }
+  const elapsed = Date.now() - startedAt
+  if (elapsed < REFLECTION_MIN_MS) {
+    await wait(REFLECTION_MIN_MS - elapsed)
+  }
+}
+
 const formatSeconds = (ms: number) => (ms / 1000).toFixed(2)
 const formatDelta = (ms: number) => `${formatSeconds(ms)}s`
 const liveIndicator = computed(() => {
@@ -461,6 +515,13 @@ const lastUpdatedLabel = computed(() => {
     second: '2-digit'
   })
 })
+const leaderboardReflecting = computed(
+  () =>
+    tapSubmitState.value === 'saving' ||
+    tapSubmitState.value === 'reflecting' ||
+    stopSubmitState.value === 'saving' ||
+    stopSubmitState.value === 'reflecting'
+)
 
 let refreshInFlight = false
 
@@ -740,22 +801,26 @@ const stopReset = () => {
   stopResultMs.value = null
 }
 
-const tapSubmitState = ref<'idle' | 'saving' | 'done' | 'error'>('idle')
-const stopSubmitState = ref<'idle' | 'saving' | 'done' | 'error'>('idle')
+const tapSubmitState = ref<SubmitState>('idle')
+const stopSubmitState = ref<SubmitState>('idle')
 const tapSubmitNotice = ref('')
 const stopSubmitNotice = ref('')
 const tapSubmitTimer = { value: null as ReturnType<typeof setTimeout> | null }
 const stopSubmitTimer = { value: null as ReturnType<typeof setTimeout> | null }
-const tapSubmitReady = computed(() => tapCanSubmit.value && hasNickname.value && tapSubmitState.value !== 'saving')
-const stopSubmitReady = computed(() => stopCanSubmit.value && hasNickname.value && stopSubmitState.value !== 'saving')
+const tapSubmitBusy = computed(() => tapSubmitState.value === 'saving' || tapSubmitState.value === 'reflecting')
+const stopSubmitBusy = computed(() => stopSubmitState.value === 'saving' || stopSubmitState.value === 'reflecting')
+const tapSubmitReady = computed(() => tapCanSubmit.value && hasNickname.value && !tapSubmitBusy.value)
+const stopSubmitReady = computed(() => stopCanSubmit.value && hasNickname.value && !stopSubmitBusy.value)
 const tapSubmitLabel = computed(() => {
-  if (!hasNickname.value) return 'ニックネームを入力'
   if (tapSubmitState.value === 'saving') return '送信中...'
+  if (tapSubmitState.value === 'reflecting') return '反映中...'
+  if (!hasNickname.value) return 'ニックネームを入力'
   return 'ランキングに送る'
 })
 const stopSubmitLabel = computed(() => {
-  if (!hasNickname.value) return 'ニックネームを入力'
   if (stopSubmitState.value === 'saving') return '送信中...'
+  if (stopSubmitState.value === 'reflecting') return '反映中...'
+  if (!hasNickname.value) return 'ニックネームを入力'
   return 'ランキングに送る'
 })
 
@@ -763,7 +828,7 @@ const setSubmitState = (
   stateRef: typeof tapSubmitState,
   noticeRef: typeof tapSubmitNotice,
   timerRef: { value: ReturnType<typeof setTimeout> | null },
-  state: 'idle' | 'saving' | 'done' | 'error',
+  state: SubmitState,
   message = ''
 ) => {
   if (timerRef.value) {
@@ -814,12 +879,16 @@ const submitScore = async (
       }
     }
     if (!response) throw new Error('Missing submit response')
+    const baselineUpdatedAt = leaderboardUpdatedAt.value
+    setSubmitState(stateRef, noticeRef, timerRef, 'reflecting', 'ランキング反映中...')
     if (response.snapshot) {
       applyLeaderboardSnapshot(response.snapshot)
     } else {
       await refreshLeaderboardWithRetry()
     }
     const rank = response.rank
+    const shouldTrackEntry = typeof rank === 'number' && rank > 0 && rank <= MAX_LEADERBOARD_ENTRIES
+    await waitForLeaderboardReflection(game, shouldTrackEntry ? response.entry.id : null, baselineUpdatedAt)
     const message = rank
       ? `ランキング${rank}位に入りました`
       : '送信しました（上位3位に入ると表示されます）'

@@ -12,14 +12,6 @@
 
       <div v-if="hasPdf" class="seating-view-toggle">
         <div class="seating-view-toggle__group">
-          <button
-            type="button"
-            class="seating-fullscreen-btn"
-            :class="{ 'is-active': viewMode === 'chart' }"
-            @click="setViewMode('chart')"
-          >
-            席次表を見る
-          </button>
           <a
             v-if="seatingPdfViewUrl"
             :href="seatingPdfViewUrl"
@@ -181,7 +173,6 @@
         </div>
         </div>
       </div>
-      <p v-show="!hasPdf || viewMode === 'chart'" class="mt-3 hidden text-xs text-white/70 sm:block">※ 横にスクロールできます</p>
     </section>
   </main>
 </template>
@@ -218,6 +209,7 @@ let pinchStartCenter = { x: 0, y: 0 }
 const BASE_MIN_ZOOM = 0.8
 const MAX_ZOOM = 3.2
 const AUTO_FIT_PADDING = 12
+const FIT_LOCK_EPSILON = 0.02
 const isSmallScreen = ref(false)
 const shouldAutoFit = ref(true)
 let smallScreenQuery: MediaQueryList | null = null
@@ -374,6 +366,14 @@ function getFitZoom() {
 
 function autoFit() {
   applyTransform(0, 0, getFitZoom())
+  if (seatingScrollRef.value) {
+    seatingScrollRef.value.scrollLeft = 0
+    seatingScrollRef.value.scrollTop = 0
+  }
+}
+
+function isFitLocked() {
+  return zoom.value <= getFitZoom() + FIT_LOCK_EPSILON
 }
 
 
@@ -481,7 +481,6 @@ function getCenter(a: { x: number; y: number }, b: { x: number; y: number }) {
 function onPointerDown(event: PointerEvent) {
   if (!seatingScrollRef.value) return
   if (event.pointerType === 'mouse' && event.button !== 0) return
-  if (event.pointerType === 'touch' && !isFullscreen.value) return
   if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   shouldAutoFit.value = false
   seatingScrollRef.value.setPointerCapture(event.pointerId)
@@ -501,11 +500,11 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (event.pointerType === 'touch' && !isFullscreen.value) return
   if (!pointers.has(event.pointerId)) return
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
   if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   if (pointers.size === 1) {
+    if (isFitLocked()) return
     const point = Array.from(pointers.values())[0]
     const dx = point.x - dragStart.x
     const dy = point.y - dragStart.y
@@ -519,6 +518,11 @@ function onPointerMove(event: PointerEvent) {
     const rawZoom = zoomStart * (distance / pinchStartDistance)
     const minZoom = getMinZoom()
     const nextZoom = clamp(rawZoom, minZoom, MAX_ZOOM)
+    const fitZoom = getFitZoom()
+    if (zoomStart <= fitZoom + FIT_LOCK_EPSILON && nextZoom <= fitZoom + FIT_LOCK_EPSILON) {
+      applyTransform(0, 0, fitZoom)
+      return
+    }
     const center = getCenter(p1, p2)
     const deltaCenter = { x: center.x - pinchStartCenter.x, y: center.y - pinchStartCenter.y }
     const pivot = getZoomPivot(center.x, center.y, panStart)
@@ -535,7 +539,6 @@ function onPointerMove(event: PointerEvent) {
 
 function onPointerUp(event: PointerEvent) {
   if (!seatingScrollRef.value) return
-  if (event.pointerType === 'touch' && !isFullscreen.value) return
   if (event.pointerType === 'touch' && event.cancelable) event.preventDefault()
   if (seatingScrollRef.value.hasPointerCapture(event.pointerId)) {
     seatingScrollRef.value.releasePointerCapture(event.pointerId)
