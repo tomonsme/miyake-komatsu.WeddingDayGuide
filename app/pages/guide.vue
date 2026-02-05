@@ -341,7 +341,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useEventData } from '../../composables/useEventData'
 
 type GameId = 'tap10' | 'stop11'
@@ -472,6 +472,13 @@ const createEntryId = () => {
     return crypto.randomUUID()
   }
   return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const waitForUiPaint = async () => {
+  await nextTick()
+  if (typeof window !== 'undefined') {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  }
 }
 
 const waitForLeaderboardReflection = async (
@@ -913,6 +920,7 @@ const submitScore = async (
       await refreshLeaderboardWithRetry()
     }
     await waitForLeaderboardReflection(game, shouldTrackEntry ? response.entry.id : null, baselineVersion)
+    await waitForUiPaint()
     setSubmitState(stateRef, noticeRef, timerRef, 'done')
     void refreshLeaderboardWithRetry()
   } catch (err) {
