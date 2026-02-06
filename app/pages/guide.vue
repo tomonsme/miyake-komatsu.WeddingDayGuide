@@ -245,7 +245,6 @@
                 </div>
                 <p class="mt-2 text-xs text-white/70" aria-live="polite">{{ tapMessage }}</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/70">
-                  <span v-if="tapBest > 0" class="score-pill">Best {{ tapBest }}</span>
                   <span v-if="tapActive" class="score-pill">Now {{ tapScore }}</span>
                 </div>
                 <p v-if="tapSubmitState === 'error'" class="mt-1 text-xs text-rose-200">
@@ -326,7 +325,6 @@
                   </button>
                 </div>
                 <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/70">
-                  <span v-if="stopBestDelta !== null" class="score-pill">Best Δ {{ formatDelta(stopBestDelta) }}</span>
                   <span v-if="stopResultMs !== null" class="score-pill">今回 {{ formatSeconds(stopResultMs) }}s</span>
                 </div>
                 <p v-if="stopSubmitState === 'error'" class="mt-2 text-xs text-rose-200">
@@ -453,6 +451,19 @@ const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | n
   const data = payload as Partial<LeaderboardSnapshot>
   if (!Array.isArray(data.tap10) || !Array.isArray(data.stop11)) return null
   return { tap10: data.tap10, stop11: data.stop11 }
+}
+
+const hasEntryInSnapshot = (snapshot: LeaderboardSnapshot, game: GameId, entryId: string) =>
+  snapshot[game].some((entry) => entry.id === entryId)
+
+const withEntryInSnapshot = (snapshot: LeaderboardSnapshot, game: GameId, entry: LeaderboardEntry) => ({
+  ...snapshot,
+  [game]: [...snapshot[game].filter((item) => item.id !== entry.id), entry]
+})
+
+const shouldRankEntry = (snapshot: LeaderboardSnapshot, game: GameId, entry: LeaderboardEntry) => {
+  const merged = [...snapshot[game].filter((item) => item.id !== entry.id), entry]
+  return limitEntries(merged, game).some((item) => item.id === entry.id)
 }
 
 const applyLeaderboardSnapshot = (payload: unknown) => {
@@ -909,13 +920,28 @@ const submitScore = async (
     }
     if (!response) throw new Error('Missing submit response')
     setSubmitState(stateRef, noticeRef, timerRef, 'reflecting')
-    if (response.snapshot) {
-      applyLeaderboardSnapshot(response.snapshot)
+    const snapshotFromResponse = normalizeLeaderboardSnapshot(response.snapshot)
+    const baseSnapshot = snapshotFromResponse ?? leaderboard.value
+    const rank = response.rank
+    const shouldTrackEntry =
+      (typeof rank === 'number' && rank > 0 && rank <= MAX_LEADERBOARD_ENTRIES) ||
+      (snapshotFromResponse
+        ? hasEntryInSnapshot(snapshotFromResponse, game, response.entry.id)
+        : shouldRankEntry(baseSnapshot, game, response.entry))
+    if (snapshotFromResponse) {
+      const snapshotToApply = shouldTrackEntry
+        ? withEntryInSnapshot(snapshotFromResponse, game, response.entry)
+        : snapshotFromResponse
+      if (!applyLeaderboardSnapshot(snapshotToApply)) {
+        await refreshLeaderboardWithRetry()
+      }
+    } else if (shouldTrackEntry) {
+      if (!applyLeaderboardSnapshot(withEntryInSnapshot(baseSnapshot, game, response.entry))) {
+        await refreshLeaderboardWithRetry()
+      }
     } else {
       await refreshLeaderboardWithRetry()
     }
-    const rank = response.rank
-    const shouldTrackEntry = typeof rank === 'number' && rank > 0 && rank <= MAX_LEADERBOARD_ENTRIES
     if (shouldTrackEntry && !leaderboard.value[game].some((entry) => entry.id === response.entry.id)) {
       await refreshLeaderboardWithRetry()
     }
