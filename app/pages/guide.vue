@@ -640,6 +640,7 @@ let pollIntervalMs = 0
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectAttempts = 0
 let lastStreamMessageAt = 0
+const streamPaused = ref(false)
 let visibilityHandler: (() => void) | null = null
 let onlineHandler: (() => void) | null = null
 let offlineHandler: (() => void) | null = null
@@ -666,6 +667,7 @@ const startLeaderboardPolling = (intervalMs: number) => {
 }
 
 const scheduleStreamReconnect = () => {
+  if (streamPaused.value) return
   if (reconnectTimer) return
   const delay = Math.min(1000 * 2 ** reconnectAttempts, RECONNECT_MAX_DELAY_MS)
   reconnectAttempts = Math.min(reconnectAttempts + 1, 6)
@@ -686,6 +688,7 @@ const reconnectLeaderboardStream = () => {
 
 const connectLeaderboardStream = (options?: { force?: boolean }) => {
   if (typeof window === 'undefined') return
+  if (streamPaused.value) return
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
@@ -718,6 +721,24 @@ const connectLeaderboardStream = (options?: { force?: boolean }) => {
     startLeaderboardPolling(POLL_FAST_MS)
     reconnectLeaderboardStream()
   }
+}
+
+const pauseLeaderboardStream = () => {
+  streamPaused.value = true
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
+  liveConnected.value = false
+}
+
+const resumeLeaderboardStream = () => {
+  streamPaused.value = false
+  connectLeaderboardStream({ force: true })
 }
 
 const tapDurationMs = 10000
@@ -931,6 +952,7 @@ const submitScore = async (
   const baselineVersion = leaderboardSnapshotVersion
   setSubmitState(stateRef, noticeRef, timerRef, 'saving')
   const entryId = createEntryId()
+  pauseLeaderboardStream()
   try {
     let response: LeaderboardSubmitResponse | null = null
     let lastError: unknown = null
@@ -987,6 +1009,8 @@ const submitScore = async (
     void refreshLeaderboardWithRetry()
   } catch (err) {
     setSubmitState(stateRef, noticeRef, timerRef, 'error', formatSubmitError(err))
+  } finally {
+    resumeLeaderboardStream()
   }
 }
 
