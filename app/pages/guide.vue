@@ -441,6 +441,34 @@ const limitEntries = (entries: LeaderboardEntry[], game: GameId) => {
   return list.slice(0, MAX_LEADERBOARD_ENTRIES)
 }
 
+const normalizeEntryLike = (payload: unknown): LeaderboardEntry | null => {
+  if (!payload || typeof payload !== 'object') return null
+  const data = payload as Partial<LeaderboardEntry>
+  if (data.game !== 'tap10' && data.game !== 'stop11') return null
+  if (typeof data.id !== 'string' || !data.id) return null
+  if (typeof data.name !== 'string') return null
+  const scoreValue = Number(data.score)
+  if (!Number.isFinite(scoreValue)) return null
+  const createdAtValue = Number(data.createdAt)
+  const createdAt = Number.isFinite(createdAtValue) ? Math.round(createdAtValue) : Date.now()
+  const meta = data.meta && typeof data.meta === 'object' ? data.meta : undefined
+  return {
+    id: data.id,
+    game: data.game,
+    name: data.name,
+    score: Math.max(0, Math.round(scoreValue)),
+    meta,
+    createdAt
+  }
+}
+
+const normalizeEntriesList = (payload: unknown) => {
+  if (!Array.isArray(payload)) return []
+  return payload
+    .map((entry) => normalizeEntryLike(entry))
+    .filter((entry): entry is LeaderboardEntry => Boolean(entry))
+}
+
 const reconcileLeaderboardSnapshot = (snapshot: LeaderboardSnapshot) => ({
   tap10: limitEntries(snapshot.tap10, 'tap10'),
   stop11: limitEntries(snapshot.stop11, 'stop11')
@@ -450,7 +478,7 @@ const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | n
   if (!payload || typeof payload !== 'object') return null
   const data = payload as Partial<LeaderboardSnapshot>
   if (!Array.isArray(data.tap10) || !Array.isArray(data.stop11)) return null
-  return { tap10: data.tap10, stop11: data.stop11 }
+  return { tap10: normalizeEntriesList(data.tap10), stop11: normalizeEntriesList(data.stop11) }
 }
 
 const hasEntryInSnapshot = (snapshot: LeaderboardSnapshot, game: GameId, entryId: string) =>
@@ -1036,32 +1064,40 @@ const submitScore = async (
     }
     if (!response) throw (lastError ?? new Error('Missing submit response'))
     setSubmitState(stateRef, noticeRef, timerRef, 'reflecting')
+    const responseEntry = normalizeEntryLike(response.entry) ?? {
+      id: entryId,
+      game,
+      name,
+      score,
+      meta,
+      createdAt: Date.now()
+    }
     const snapshotFromResponse = normalizeLeaderboardSnapshot(response.snapshot)
     const baseSnapshot = snapshotFromResponse ?? leaderboard.value
     const rank = response.rank
     const shouldTrackEntry =
       (typeof rank === 'number' && rank > 0 && rank <= MAX_LEADERBOARD_ENTRIES) ||
       (snapshotFromResponse
-        ? hasEntryInSnapshot(snapshotFromResponse, game, response.entry.id)
-        : shouldRankEntry(baseSnapshot, game, response.entry))
+        ? hasEntryInSnapshot(snapshotFromResponse, game, responseEntry.id)
+        : shouldRankEntry(baseSnapshot, game, responseEntry))
     if (snapshotFromResponse) {
       const snapshotToApply = shouldTrackEntry
-        ? withEntryInSnapshot(snapshotFromResponse, game, response.entry)
+        ? withEntryInSnapshot(snapshotFromResponse, game, responseEntry)
         : snapshotFromResponse
       if (!applyLeaderboardSnapshot(snapshotToApply)) {
         await refreshLeaderboardWithRetry()
       }
     } else if (shouldTrackEntry) {
-      if (!applyLeaderboardSnapshot(withEntryInSnapshot(baseSnapshot, game, response.entry))) {
+      if (!applyLeaderboardSnapshot(withEntryInSnapshot(baseSnapshot, game, responseEntry))) {
         await refreshLeaderboardWithRetry()
       }
     } else {
       await refreshLeaderboardWithRetry()
     }
-    if (shouldTrackEntry && !leaderboard.value[game].some((entry) => entry.id === response.entry.id)) {
+    if (shouldTrackEntry && !leaderboard.value[game].some((entry) => entry.id === responseEntry.id)) {
       await refreshLeaderboardWithRetry()
     }
-    await waitForLeaderboardReflection(game, shouldTrackEntry ? response.entry.id : null, baselineVersion)
+    await waitForLeaderboardReflection(game, shouldTrackEntry ? responseEntry.id : null, baselineVersion)
     await waitForUiPaint()
     setSubmitState(stateRef, noticeRef, timerRef, 'done')
     void refreshLeaderboardWithRetry()
