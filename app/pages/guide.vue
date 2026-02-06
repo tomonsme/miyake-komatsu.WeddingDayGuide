@@ -495,6 +495,18 @@ const getFetchStatusMessage = (err: unknown) => {
   return typeof anyErr.data?.statusMessage === 'string' ? anyErr.data.statusMessage : ''
 }
 
+const truncate = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max)}…` : value)
+
+const safeStringify = (value: unknown, max = 160) => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return truncate(value, max)
+  try {
+    return truncate(JSON.stringify(value), max)
+  } catch {
+    return ''
+  }
+}
+
 const isRetryableSubmitError = (err: unknown) => {
   const status = getFetchStatus(err)
   if (!status) return true
@@ -506,10 +518,41 @@ const submitRetryDelay = (attempt: number) => Math.min(2000, 500 * (attempt + 1)
 const formatSubmitError = (err: unknown) => {
   const status = getFetchStatus(err)
   const message = getFetchStatusMessage(err)
-  if (status) {
-    return message ? `送信できませんでした（${status}: ${message}）` : `送信できませんでした（${status}）`
+  const anyErr = err as {
+    name?: string
+    message?: string
+    request?: { url?: string } | string
+    response?: { url?: string }
+    data?: unknown
+    cause?: { message?: string } | string
   }
-  return '送信できませんでした（通信エラー）'
+  const name = typeof anyErr?.name === 'string' ? anyErr.name : ''
+  const errMessage = typeof anyErr?.message === 'string' ? anyErr.message : ''
+  const causeMessage = typeof anyErr?.cause === 'string'
+    ? anyErr.cause
+    : typeof anyErr?.cause?.message === 'string'
+      ? anyErr.cause.message
+      : ''
+  const url = typeof anyErr?.request === 'string'
+    ? anyErr.request
+    : typeof anyErr?.request?.url === 'string'
+      ? anyErr.request.url
+      : typeof anyErr?.response?.url === 'string'
+        ? anyErr.response.url
+        : ''
+  const data = safeStringify(anyErr?.data, 160)
+  const detailParts = [name, errMessage, causeMessage].filter(Boolean).join(' ')
+  const detailExtras = [
+    url ? `url=${url}` : '',
+    data ? `data=${data}` : ''
+  ].filter(Boolean).join(' ')
+  if (status) {
+    const statusLine = message ? `${status}: ${message}` : String(status)
+    const detail = [detailParts, detailExtras].filter(Boolean).join(' ')
+    return detail ? `送信できませんでした（${statusLine} ${detail}）` : `送信できませんでした（${statusLine}）`
+  }
+  const detail = [detailParts, detailExtras].filter(Boolean).join(' ')
+  return detail ? `送信できませんでした（通信エラー: ${detail}）` : '送信できませんでした（通信エラー）'
 }
 const createEntryId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
