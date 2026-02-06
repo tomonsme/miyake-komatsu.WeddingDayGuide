@@ -425,6 +425,7 @@ const REFLECTION_MIN_MS = 1200
 const REFLECTION_TIMEOUT_MS = 8000
 const RESET_HOLD_MS = 1600
 const PENDING_ENTRY_TTL_MS = 12000
+const PENDING_ENTRY_CONFIRMED_TTL_MS = 20000
 
 const sortTapEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
   if (b.score !== a.score) return b.score - a.score
@@ -482,7 +483,7 @@ const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | n
   return { tap10: normalizeEntriesList(data.tap10), stop11: normalizeEntriesList(data.stop11) }
 }
 
-type PendingEntry = { entry: LeaderboardEntry; expiresAt: number }
+type PendingEntry = { entry: LeaderboardEntry; expiresAt: number; confirmedAt: number | null; force: boolean }
 const pendingEntries = ref<Record<GameId, PendingEntry | null>>({ tap10: null, stop11: null })
 
 const clearPendingEntry = (game: GameId, entryId?: string) => {
@@ -493,11 +494,21 @@ const clearPendingEntry = (game: GameId, entryId?: string) => {
   }
 }
 
-const setPendingEntry = (game: GameId, entry: LeaderboardEntry) => {
+const setPendingEntry = (game: GameId, entry: LeaderboardEntry, options?: { force?: boolean }) => {
   pendingEntries.value[game] = {
     entry,
-    expiresAt: Date.now() + PENDING_ENTRY_TTL_MS
+    expiresAt: Date.now() + PENDING_ENTRY_TTL_MS,
+    confirmedAt: null,
+    force: Boolean(options?.force)
   }
+}
+
+const touchPendingEntry = (pending: PendingEntry, now: number, confirmed: boolean) => {
+  if (confirmed && pending.confirmedAt === null) {
+    pending.confirmedAt = now
+  }
+  const ttl = confirmed ? PENDING_ENTRY_CONFIRMED_TTL_MS : PENDING_ENTRY_TTL_MS
+  pending.expiresAt = Math.max(pending.expiresAt, now + ttl)
 }
 
 const hasEntryInSnapshot = (snapshot: LeaderboardSnapshot, game: GameId, entryId: string) =>
@@ -527,10 +538,11 @@ const applyLeaderboardSnapshot = (payload: unknown) => {
       continue
     }
     if (merged[game].some((entry) => entry.id === pending.entry.id)) {
-      clearPendingEntry(game, pending.entry.id)
+      touchPendingEntry(pending, now, true)
       continue
     }
-    if (shouldRankEntry(reconciled, game, pending.entry)) {
+    if (pending.force || shouldRankEntry(reconciled, game, pending.entry)) {
+      touchPendingEntry(pending, now, false)
       merged[game] = limitEntries([...merged[game], pending.entry], game)
     }
   }
@@ -1118,7 +1130,7 @@ const submitScore = async (
         ? hasEntryInSnapshot(snapshotFromResponse, game, responseEntry.id)
         : shouldRankEntry(baseSnapshot, game, responseEntry))
     if (shouldTrackEntry) {
-      setPendingEntry(game, responseEntry)
+      setPendingEntry(game, responseEntry, { force: true })
     } else {
       clearPendingEntry(game)
     }
