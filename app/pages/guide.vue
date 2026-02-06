@@ -484,8 +484,15 @@ const getFetchStatus = (err: unknown) => {
     status?: number
     statusCode?: number
     response?: { status?: number; statusCode?: number }
+    data?: { statusMessage?: string }
   }
   return anyErr.status ?? anyErr.statusCode ?? anyErr.response?.status ?? anyErr.response?.statusCode ?? null
+}
+
+const getFetchStatusMessage = (err: unknown) => {
+  if (!err || typeof err !== 'object') return ''
+  const anyErr = err as { data?: { statusMessage?: string } }
+  return typeof anyErr.data?.statusMessage === 'string' ? anyErr.data.statusMessage : ''
 }
 
 const isRetryableSubmitError = (err: unknown) => {
@@ -496,6 +503,14 @@ const isRetryableSubmitError = (err: unknown) => {
 }
 
 const submitRetryDelay = (attempt: number) => Math.min(2000, 500 * (attempt + 1))
+const formatSubmitError = (err: unknown) => {
+  const status = getFetchStatus(err)
+  const message = getFetchStatusMessage(err)
+  if (status) {
+    return message ? `送信できませんでした（${status}: ${message}）` : `送信できませんでした（${status}）`
+  }
+  return '送信できませんでした（通信エラー）'
+}
 const createEntryId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -971,7 +986,7 @@ const submitScore = async (
     setSubmitState(stateRef, noticeRef, timerRef, 'done')
     void refreshLeaderboardWithRetry()
   } catch (err) {
-    setSubmitState(stateRef, noticeRef, timerRef, 'error', '送信できませんでした')
+    setSubmitState(stateRef, noticeRef, timerRef, 'error', formatSubmitError(err))
   }
 }
 
