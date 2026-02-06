@@ -424,6 +424,7 @@ const REFLECTION_POLL_MS = 200
 const REFLECTION_MIN_MS = 1200
 const REFLECTION_TIMEOUT_MS = 8000
 const RESET_HOLD_MS = 1600
+const PENDING_ENTRY_TTL_MS = 12000
 
 const sortTapEntries = (a: LeaderboardEntry, b: LeaderboardEntry) => {
   if (b.score !== a.score) return b.score - a.score
@@ -481,6 +482,24 @@ const normalizeLeaderboardSnapshot = (payload: unknown): LeaderboardSnapshot | n
   return { tap10: normalizeEntriesList(data.tap10), stop11: normalizeEntriesList(data.stop11) }
 }
 
+type PendingEntry = { entry: LeaderboardEntry; expiresAt: number }
+const pendingEntries = ref<Record<GameId, PendingEntry | null>>({ tap10: null, stop11: null })
+
+const clearPendingEntry = (game: GameId, entryId?: string) => {
+  const pending = pendingEntries.value[game]
+  if (!pending) return
+  if (!entryId || pending.entry.id === entryId) {
+    pendingEntries.value[game] = null
+  }
+}
+
+const setPendingEntry = (game: GameId, entry: LeaderboardEntry) => {
+  pendingEntries.value[game] = {
+    entry,
+    expiresAt: Date.now() + PENDING_ENTRY_TTL_MS
+  }
+}
+
 const hasEntryInSnapshot = (snapshot: LeaderboardSnapshot, game: GameId, entryId: string) =>
   snapshot[game].some((entry) => entry.id === entryId)
 
@@ -497,7 +516,25 @@ const shouldRankEntry = (snapshot: LeaderboardSnapshot, game: GameId, entry: Lea
 const applyLeaderboardSnapshot = (payload: unknown) => {
   const normalized = normalizeLeaderboardSnapshot(payload)
   if (!normalized) return false
-  leaderboard.value = reconcileLeaderboardSnapshot(normalized)
+  const reconciled = reconcileLeaderboardSnapshot(normalized)
+  const merged: LeaderboardSnapshot = { ...reconciled }
+  const now = Date.now()
+  for (const game of ['tap10', 'stop11'] as GameId[]) {
+    const pending = pendingEntries.value[game]
+    if (!pending) continue
+    if (pending.expiresAt <= now) {
+      pendingEntries.value[game] = null
+      continue
+    }
+    if (merged[game].some((entry) => entry.id === pending.entry.id)) {
+      clearPendingEntry(game, pending.entry.id)
+      continue
+    }
+    if (shouldRankEntry(reconciled, game, pending.entry)) {
+      merged[game] = limitEntries([...merged[game], pending.entry], game)
+    }
+  }
+  leaderboard.value = merged
   leaderboardUpdatedAt.value = Date.now()
   leaderboardError.value = ''
   liveConnected.value = true
@@ -1080,6 +1117,11 @@ const submitScore = async (
       (snapshotFromResponse
         ? hasEntryInSnapshot(snapshotFromResponse, game, responseEntry.id)
         : shouldRankEntry(baseSnapshot, game, responseEntry))
+    if (shouldTrackEntry) {
+      setPendingEntry(game, responseEntry)
+    } else {
+      clearPendingEntry(game)
+    }
     if (snapshotFromResponse) {
       const snapshotToApply = shouldTrackEntry
         ? withEntryInSnapshot(snapshotFromResponse, game, responseEntry)
