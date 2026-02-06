@@ -641,6 +641,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectAttempts = 0
 let lastStreamMessageAt = 0
 const streamPaused = ref(false)
+let pollIntervalBeforePause = 0
 let visibilityHandler: (() => void) | null = null
 let onlineHandler: (() => void) | null = null
 let offlineHandler: (() => void) | null = null
@@ -739,6 +740,20 @@ const pauseLeaderboardStream = () => {
 const resumeLeaderboardStream = () => {
   streamPaused.value = false
   connectLeaderboardStream({ force: true })
+}
+
+const pauseLeaderboardUpdates = () => {
+  pollIntervalBeforePause = pollIntervalMs
+  stopLeaderboardPolling()
+  pauseLeaderboardStream()
+}
+
+const resumeLeaderboardUpdates = () => {
+  resumeLeaderboardStream()
+  if (pollIntervalBeforePause) {
+    startLeaderboardPolling(pollIntervalBeforePause)
+    pollIntervalBeforePause = 0
+  }
 }
 
 const tapDurationMs = 10000
@@ -952,7 +967,7 @@ const submitScore = async (
   const baselineVersion = leaderboardSnapshotVersion
   setSubmitState(stateRef, noticeRef, timerRef, 'saving')
   const entryId = createEntryId()
-  pauseLeaderboardStream()
+  pauseLeaderboardUpdates()
   try {
     let response: LeaderboardSubmitResponse | null = null
     let lastError: unknown = null
@@ -1010,7 +1025,7 @@ const submitScore = async (
   } catch (err) {
     setSubmitState(stateRef, noticeRef, timerRef, 'error', formatSubmitError(err))
   } finally {
-    resumeLeaderboardStream()
+    resumeLeaderboardUpdates()
   }
 }
 
