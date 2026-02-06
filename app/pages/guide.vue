@@ -478,6 +478,24 @@ const applyLeaderboardSnapshot = (payload: unknown) => {
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const getFetchStatus = (err: unknown) => {
+  if (!err || typeof err !== 'object') return null
+  const anyErr = err as {
+    status?: number
+    statusCode?: number
+    response?: { status?: number; statusCode?: number }
+  }
+  return anyErr.status ?? anyErr.statusCode ?? anyErr.response?.status ?? anyErr.response?.statusCode ?? null
+}
+
+const isRetryableSubmitError = (err: unknown) => {
+  const status = getFetchStatus(err)
+  if (!status) return true
+  if (status === 408 || status === 425 || status === 429) return true
+  return status >= 500
+}
+
+const submitRetryDelay = (attempt: number) => Math.min(2000, 500 * (attempt + 1))
 const createEntryId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -900,7 +918,8 @@ const submitScore = async (
   const entryId = createEntryId()
   try {
     let response: LeaderboardSubmitResponse | null = null
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    let lastError: unknown = null
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
         response = await $fetch<LeaderboardSubmitResponse>('/api/leaderboard', {
           method: 'POST',
@@ -912,13 +931,15 @@ const submitScore = async (
             meta
           }
         })
+        lastError = null
         break
       } catch (err) {
-        if (attempt >= 1) throw err
-        await wait(400 * (attempt + 1))
+        lastError = err
+        if (!isRetryableSubmitError(err) || attempt >= 4) throw err
+        await wait(submitRetryDelay(attempt))
       }
     }
-    if (!response) throw new Error('Missing submit response')
+    if (!response) throw (lastError ?? new Error('Missing submit response'))
     setSubmitState(stateRef, noticeRef, timerRef, 'reflecting')
     const snapshotFromResponse = normalizeLeaderboardSnapshot(response.snapshot)
     const baseSnapshot = snapshotFromResponse ?? leaderboard.value
