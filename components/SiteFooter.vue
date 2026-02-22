@@ -9,7 +9,6 @@
         <div class="max-w-prose mx-auto md:mx-0">
           <h3 class="font-display text-base tracking-wide text-white">Wedding Day</h3>
           <LeafDivider />
-          <p class="mt-2 text-[13px] leading-relaxed text-white/80">本日はご来場ありがとうございます</p>
         </div>
       </div>
       <div class="mt-3 text-center text-[11px] text-white/40 tracking-wide">
